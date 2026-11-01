@@ -1058,6 +1058,115 @@ class AnalyzerTest {
         assertEquals(0, graph.stats.resolution.unresolved)
     }
 
+    @Test
+    fun `java var instanceof-pattern wildcard and try-with-resources`() {
+        val graph = analyze(
+            module(
+                ":app:main",
+                "Util.java" to """
+                    package com.example;
+                    import java.io.Closeable;
+                    public class Util implements Closeable {
+                        public void go() {}
+                        public void close() {}
+                    }
+                """,
+                "Helper.java" to "package com.example; public class Helper {}",
+                "Main.java" to """
+                    package com.example;
+                    import java.util.List;
+                    public class Main {
+                        void run(List<? extends Helper> hs, Object o) throws Exception {
+                            var u = new Util();
+                            u.go();
+                            if (o instanceof Helper h) { Helper copy = h; }
+                            try (Util res = new Util()) { res.go(); }
+                        }
+                    }
+                """,
+            ),
+        )
+        assertNotNull(edge(graph, "com.example.Main", "com.example.Util", EdgeKind.CONSTRUCTOR_CALL))
+        assertNotNull(edge(graph, "com.example.Main", "com.example.Util", EdgeKind.FUNCTION_CALL))
+        assertNotNull(edge(graph, "com.example.Main", "com.example.Helper", EdgeKind.TYPE_REFERENCE))
+        assertEquals(0, graph.stats.resolution.unresolved)
+    }
+
+    @Test
+    fun `unqualified static-imported java call resolves to the owner`() {
+        val graph = analyze(
+            module(":lib:main", "U.java" to "package lib; public class U { public static void work() {} }"),
+            module(
+                ":app:main",
+                "A.java" to """
+                    package app;
+                    import static lib.U.work;
+                    public class A { void m() { work(); } }
+                """,
+                dependencies = listOf(":lib:main"),
+            ),
+        )
+        assertNotNull(edge(graph, "app.A", "lib.U", EdgeKind.FUNCTION_CALL))
+        assertEquals(0, graph.stats.resolution.unresolved)
+    }
+
+    @Test
+    fun `java reaches kotlin companion through Companion and annotations cross both ways`() {
+        val graph = analyze(
+            module(
+                ":app:main",
+                "K.kt" to """
+                    package com.example
+
+                    annotation class KAnn
+
+                    class K {
+                        companion object { fun make() = K() }
+                    }
+                """,
+                "JAnn.java" to "package com.example; public @interface JAnn {}",
+                "Use.java" to """
+                    package com.example;
+                    @KAnn
+                    public class Use { K k = K.Companion.make(); }
+                """,
+                "Use2.kt" to """
+                    package com.example
+
+                    @JAnn
+                    class Use2
+                """,
+            ),
+        )
+        assertNotNull(
+            edge(graph, "com.example.Use", "com.example.K.Companion", EdgeKind.FUNCTION_CALL),
+            "companion call lands on the companion node, as in Kotlin",
+        )
+        assertNotNull(
+            edge(graph, "com.example.Use", "com.example.KAnn", EdgeKind.ANNOTATION),
+            "Java class annotated with a Kotlin annotation",
+        )
+        assertNotNull(
+            edge(graph, "com.example.Use2", "com.example.JAnn", EdgeKind.ANNOTATION),
+            "Kotlin class annotated with a Java annotation",
+        )
+        assertEquals(0, graph.stats.resolution.unresolved)
+    }
+
+    @Test
+    fun `includeJavaSources false still analyzes kotlin fully`() {
+        val graph = analyze(
+            module(
+                ":app:main",
+                "A.java" to "package com.example; public class A {}",
+                "K.kt" to "package com.example\nclass K(val s: String)",
+            ),
+            includeJavaSources = false,
+        )
+        assertNotNull(graph.nodes.singleOrNull { it.fqName == "com.example.K" })
+        assertTrue(graph.nodes.none { it.fqName == "com.example.A" })
+    }
+
     private fun module(
         id: String,
         vararg sources: Pair<String, String>,
