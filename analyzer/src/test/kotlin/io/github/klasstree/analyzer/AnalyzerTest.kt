@@ -370,6 +370,57 @@ class AnalyzerTest {
         assertEquals(emptyList(), graph.stats.resolution.analysisErrors)
     }
 
+    @Test
+    fun `a source root shared by several modules is claimed once`() {
+        val root = Files.createTempDirectory("klass-tree-analyzer-test")
+        try {
+            val shared = root.resolve("shared").also { Files.createDirectories(it) }
+            shared.resolve("Shared.kt").toFile().writeText(
+                "package com.example\nclass Shared\nfun sharedTop() = Shared()\n",
+            )
+            val aSrc = root.resolve("a").also { Files.createDirectories(it) }
+            aSrc.resolve("A.kt").toFile().writeText(
+                "package com.example\nclass A { val s = Shared(); fun a() = sharedTop() }\n",
+            )
+            val bSrc = root.resolve("b").also { Files.createDirectories(it) }
+            bSrc.resolve("B.kt").toFile().writeText(
+                "package com.example\nclass B { val s = Shared(); fun b() = sharedTop() }\n",
+            )
+            fun moduleSpec(id: String, vararg roots: Path) = ModuleSpec(
+                id = id,
+                projectPath = id.substringBeforeLast(":"),
+                sourceSetName = "main",
+                moduleName = id.removePrefix(":").replace(":", "_"),
+                sourceRoots = roots.map { it.toString() },
+                classpath = listOf(stdlib()),
+                dependencies = emptyList(),
+            )
+            val graph = Analyzer().analyze(
+                AnalysisSpec(
+                    projectRoot = root.toString(),
+                    modules = listOf(
+                        moduleSpec(":a:main", aSrc, shared),
+                        moduleSpec(":b:main", bSrc, shared),
+                    ),
+                ),
+            )
+
+            val sharedNodes = graph.nodes.filter { it.sourceFile == "shared/Shared.kt" }
+            assertTrue(sharedNodes.isNotEmpty())
+            assertTrue(sharedNodes.all { it.module == "a" })
+            assertEquals(emptyList(), graph.stats.resolution.analysisErrors)
+
+            val byId = graph.nodes.associateBy { it.id }
+            val sharedClass = graph.nodes.single { it.fqName == "com.example.Shared" }
+            assertTrue(
+                graph.edges.filter { it.to == sharedClass.id }
+                    .all { byId.getValue(it.from).module == "a" },
+            )
+        } finally {
+            root.toFile().deleteRecursively()
+        }
+    }
+
     private fun module(
         id: String,
         vararg sources: Pair<String, String>,

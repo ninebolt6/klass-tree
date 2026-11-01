@@ -67,6 +67,9 @@ class Analyzer {
                     // One library module per normalized classpath entry is shared across source modules.
                     // This indexes each jar once even when module classpaths differ slightly.
                     val builtLibraries = LinkedHashMap<Path, KaLibraryModule>()
+                    // A source root claimed by several modules would bind its files to more than
+                    // one KaModule and corrupt resolution, so the first module claims it.
+                    val claimedSourceRoots = HashSet<Path>()
                     val building = LinkedHashSet<String>()
 
                     fun libraryFor(path: Path): KaLibraryModule =
@@ -95,7 +98,10 @@ class Analyzer {
                                 platform = JvmPlatforms.defaultJvmPlatform
                                 moduleName = moduleSpec.moduleName
                                 addSourceRoots(
-                                    moduleSpec.sourceRoots.map { Path.of(it) }.filter { Files.exists(it) },
+                                    moduleSpec.sourceRoots
+                                        .map { Path.of(it).toAbsolutePath().normalize() }
+                                        .filter { Files.exists(it) }
+                                        .filter { claimedSourceRoots.add(it) },
                                 )
                                 addRegularDependency(sdk)
                                 libraryPaths.forEach { addRegularDependency(libraryFor(it)) }
@@ -162,15 +168,19 @@ class Analyzer {
         spec: AnalysisSpec,
     ): List<SourceFileInfo> {
         val specsByName = spec.modules.associateBy { it.moduleName }
+        val filesByModuleName = session.modulesWithFiles.mapKeys { (module, _) -> module.name }
         val projectRoot = Path.of(spec.projectRoot).toAbsolutePath().normalize()
         val result = mutableListOf<SourceFileInfo>()
+        val claimed = HashSet<Path>()
 
-        for ((module, psiFiles) in session.modulesWithFiles) {
-            val moduleSpec = specsByName[module.name] ?: continue
+        for (moduleSpec in spec.modules) {
+            val psiFiles = filesByModuleName[moduleSpec.moduleName] ?: continue
             for (psiFile in psiFiles) {
                 val file = psiFile as? KtFile ?: continue
                 if (file.isScript()) continue
                 val absolutePath = file.virtualFile?.path?.let { Path.of(it).toAbsolutePath().normalize() } ?: continue
+                // Overlapping (non-identical) source roots can still list the same file.
+                if (!claimed.add(absolutePath)) continue
                 result += SourceFileInfo(
                     module = moduleSpec,
                     file = file,
