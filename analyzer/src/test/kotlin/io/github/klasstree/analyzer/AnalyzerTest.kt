@@ -458,6 +458,83 @@ class AnalyzerTest {
         assertEquals(0, graph.stats.resolution.unresolved)
     }
 
+    @Test
+    fun `an import alone does not create a dependency edge`() {
+        val graph = analyze(
+            module(
+                ":app:main",
+                "Dep.kt" to """
+                package com.example
+
+                class Unused
+                """,
+                "Uses.kt" to """
+                package com.example
+
+                import com.example.Unused
+
+                class Uses
+                """,
+            ),
+        )
+
+        val uses = graph.nodes.single { it.fqName == "com.example.Uses" }
+        val fileScope = graph.nodes.singleOrNull {
+            it.kind == NodeKind.FILE_SCOPE && it.sourceFile == "src/app/main/Uses.kt"
+        }
+        assertTrue(graph.edges.none { it.from == uses.id || it.from == fileScope?.id })
+    }
+
+    @Test
+    fun `compiler-generated members do not produce call edges`() {
+        val graph = analyze(
+            module(
+                ":app:main",
+                "Model.kt" to """
+                package com.example
+
+                data class Point(val x: Int, val y: Int)
+
+                class Uses {
+                    fun a(p: Point) = p.copy(x = 1)
+                    fun b(p: Point, q: Point) = p == q
+                    fun c(p: Point) { val (x, y) = p; x + y }
+                }
+                """,
+            ),
+        )
+
+        val point = graph.nodes.single { it.fqName == "com.example.Point" }
+        val uses = graph.nodes.single { it.fqName == "com.example.Uses" }
+        assertTrue(
+            graph.edges.none {
+                it.from == uses.id && it.to == point.id &&
+                    it.kind != EdgeKind.TYPE_REFERENCE
+            },
+        )
+        assertTrue(graph.edges.any { it.from == uses.id && it.to == point.id && it.kind == EdgeKind.TYPE_REFERENCE })
+    }
+
+    @Test
+    fun `kotlin scripts are not analyzed`() {
+        val graph = analyze(
+            module(
+                ":app:main",
+                "script.kts" to """
+                val x = 1
+                """,
+                "Real.kt" to """
+                package com.example
+
+                class Real
+                """,
+            ),
+        )
+
+        assertEquals(1, graph.stats.sourceFileCount)
+        assertTrue(graph.nodes.all { it.sourceFile == "src/app/main/Real.kt" })
+    }
+
     private fun module(
         id: String,
         vararg sources: Pair<String, String>,
