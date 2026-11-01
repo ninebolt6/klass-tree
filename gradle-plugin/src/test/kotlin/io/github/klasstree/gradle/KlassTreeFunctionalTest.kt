@@ -145,6 +145,7 @@ class KlassTreeFunctionalTest {
         assertTrue(classpath.none { java.io.File(it).name.startsWith("gradle-") })
         assertTrue(classpath.none { java.io.File(it).name.startsWith("kotlin-compiler-embeddable") })
         assertTrue(classpath.any { it.contains("analyzer") })
+        assertTrue(classpath.any { it.contains("graph-dot") })
     }
 
     private fun writeProject(

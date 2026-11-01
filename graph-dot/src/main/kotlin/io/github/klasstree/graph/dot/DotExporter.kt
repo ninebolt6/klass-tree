@@ -1,5 +1,9 @@
-package io.github.klasstree.graph
+package io.github.klasstree.graph.dot
 
+import io.github.klasstree.graph.DependencyGraph
+import io.github.klasstree.graph.EdgeKind
+import io.github.klasstree.graph.GraphNode
+import io.github.klasstree.graph.NodeKind
 import java.nio.file.Files
 import java.nio.file.Path
 

@@ -2,7 +2,7 @@ package io.github.klasstree.analyzer
 
 import io.github.klasstree.graph.AnalysisSpec
 import io.github.klasstree.graph.DependencyGraph
-import io.github.klasstree.graph.DotExporter
+import io.github.klasstree.graph.dot.DotExporter
 import io.github.klasstree.graph.JsonExporter
 import io.github.klasstree.graph.KlassTreeJson
 import kotlinx.serialization.decodeFromString

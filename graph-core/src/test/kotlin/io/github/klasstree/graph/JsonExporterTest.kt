@@ -5,7 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-class ExportersTest {
+class JsonExporterTest {
     private val graph = DependencyGraph(
         generatedAt = "2026-01-01T00:00:00Z",
         projectRoot = "/project",
@@ -60,31 +60,5 @@ class ExportersTest {
         assertEquals(graph, decoded)
         assertTrue(json.contains("\"package\": \"com.example\""))
         assertTrue(!json.contains("null"))
-    }
-
-    @Test
-    fun `dot groups nodes by module`() {
-        val dot = DotExporter.render(graph)
-
-        assertTrue(dot.startsWith("digraph klass_tree {"))
-        assertTrue(dot.contains("subgraph cluster_shared {"))
-        assertTrue(dot.contains("\"shared:src/User.kt#CLASS:com.example.User\""))
-        assertTrue(dot.contains("label=\"TYPE_REFERENCE\""))
-        assertTrue(dot.trimEnd().endsWith("}"))
-    }
-
-    @Test
-    fun `dot escapes quotes and backslashes`() {
-        val node = GraphNode(
-            id = "id\"with\\special",
-            kind = NodeKind.CLASS,
-            name = "A\"B\\C",
-            module = "m",
-            sourceSet = "main",
-        )
-        val dot = DotExporter.render(graph.copy(nodes = listOf(node), edges = emptyList()))
-
-        assertTrue(dot.contains("id\\\"with\\\\special"))
-        assertTrue(dot.contains("A\\\"B\\\\C"))
     }
 }

@@ -194,7 +194,8 @@ counted in `stats.resolution` instead.
 
 | Module | Responsibility |
 | --- | --- |
-| `graph-core` | Platform-independent graph model, `AnalysisSpec`, edge merging, JSON and DOT exporters. |
+| `graph-core` | Platform-independent graph model, `AnalysisSpec`, edge merging, and the JSON exporter. |
+| `graph-dot` | Graphviz DOT rendering. Optional: depend on it directly if you only need DOT from `graph.json`. |
 | `analyzer` | Analysis API Standalone session, declaration indexing, PSI candidate collection, semantic resolution, and the forked entry point. |
 | `gradle-plugin` | Root plugin, extension, per-source-set module-spec tasks, and the task that launches the analyzer. |
 
@@ -206,7 +207,8 @@ Data flow:
    plugin's own runtime. The fork is required because Analysis API Standalone installs IntelliJ
    services that are not safe to load into the Gradle daemon.
 3. The analyzer indexes source declarations, resolves PSI references, and builds the graph.
-4. `graph.json` is written first; `graph.dot` is rendered from that JSON so the two cannot drift.
+4. `graph.json` is written first; `graph.dot` is rendered from that JSON by `graph-dot`
+   (`DotExporter`) so the two cannot drift.
 
 ## Fixture
 

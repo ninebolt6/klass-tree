@@ -21,6 +21,9 @@ internal object PluginClasspath {
             runCatching {
                 Class.forName("io.github.klasstree.analyzer.AnalyzerMainKt", false, loader)
             }.getOrNull(),
+            runCatching {
+                Class.forName("io.github.klasstree.graph.dot.DotExporter", false, loader)
+            }.getOrNull(),
         )
         representativeClasses.forEach { type ->
             type.protectionDomain?.codeSource?.location?.let { location ->
