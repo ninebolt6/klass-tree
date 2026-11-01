@@ -51,6 +51,8 @@ applied to the root project; applying it elsewhere fails with an explicit error.
 
 The task is up-to-date checked and supports the configuration cache.
 
+`example/` is a runnable two-module project wired exactly like this; see [Example](#example).
+
 ## Configuration
 
 ```kotlin
@@ -210,14 +212,17 @@ Data flow:
 4. `graph.json` is written first; `graph.dot` is rendered from that JSON by `graph-dot`
    (`DotExporter`) so the two cannot drift.
 
-## Fixture
+## Example
+
+`example/` is a standalone build that consumes the plugin through `includeBuild("..")` and
+analyzes two modules (`api` depends on `shared`).
 
 ```shell
-./gradlew -p fixtures klassTree                    # main sources
-./gradlew -p fixtures klassTree -PklassTreeTests=true  # include test sources
+./gradlew -p example klassTree                    # main sources
+./gradlew -p example klassTree -PklassTreeTests=true  # include test sources
 ```
 
-Outputs go to `fixtures/build/klass-tree/`.
+Outputs go to `example/build/klass-tree/`.
 
 ## Limitations
 
@@ -235,5 +240,5 @@ Outputs go to `fixtures/build/klass-tree/`.
 ```shell
 ./gradlew build          # compile, test, and check all modules
 ./gradlew :analyzer:test # analyzer integration test
-./gradlew -p fixtures klassTree
+./gradlew -p example klassTree
 ```

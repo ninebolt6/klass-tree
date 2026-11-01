@@ -13,7 +13,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "klass-tree-fixture"
+rootProject.name = "klass-tree-example"
 
 include("shared")
 include("api")
