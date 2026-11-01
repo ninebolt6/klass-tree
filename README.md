@@ -196,10 +196,10 @@ counted in `stats.resolution` instead.
 
 | Module | Responsibility |
 | --- | --- |
-| `graph-core` | Platform-independent graph model, `AnalysisSpec`, edge merging, and the JSON exporter. |
-| `graph-dot` | Graphviz DOT rendering. Optional: depend on it directly if you only need DOT from `graph.json`. |
-| `analyzer` | Analysis API Standalone session, declaration indexing, PSI candidate collection, semantic resolution, and the forked entry point. |
-| `gradle-plugin` | Root plugin, extension, per-source-set module-spec tasks, and the task that launches the analyzer. |
+| `klass-tree-graph-core` | Platform-independent graph model, `AnalysisSpec`, edge merging, and the JSON exporter. |
+| `klass-tree-graph-dot` | Graphviz DOT rendering. Optional: depend on it directly if you only need DOT from `graph.json`. |
+| `klass-tree-analyzer` | Analysis API Standalone session, declaration indexing, PSI candidate collection, semantic resolution, and the forked entry point. |
+| `klass-tree-gradle-plugin` | Root plugin, extension, per-source-set module-spec tasks, and the task that launches the analyzer. |
 
 Data flow:
 
@@ -209,7 +209,7 @@ Data flow:
    plugin's own runtime. The fork is required because Analysis API Standalone installs IntelliJ
    services that are not safe to load into the Gradle daemon.
 3. The analyzer indexes source declarations, resolves PSI references, and builds the graph.
-4. `graph.json` is written first; `graph.dot` is rendered from that JSON by `graph-dot`
+4. `graph.json` is written first; `graph.dot` is rendered from that JSON by `klass-tree-graph-dot`
    (`DotExporter`) so the two cannot drift.
 
 ## Example
@@ -239,6 +239,6 @@ Outputs go to `example/build/klass-tree/`.
 
 ```shell
 ./gradlew build          # compile, test, and check all modules
-./gradlew :analyzer:test # analyzer integration test
+./gradlew :klass-tree-analyzer:test # analyzer integration test
 ./gradlew -p example klassTree
 ```

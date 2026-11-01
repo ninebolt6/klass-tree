@@ -14,7 +14,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "klass-tree"
 
-include("graph-core")
-include("graph-dot")
-include("analyzer")
-include("gradle-plugin")
+include("klass-tree-graph-core")
+include("klass-tree-graph-dot")
+include("klass-tree-analyzer")
+include("klass-tree-gradle-plugin")

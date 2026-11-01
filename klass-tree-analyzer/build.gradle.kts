@@ -3,8 +3,8 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":graph-core"))
-    implementation(project(":graph-dot"))
+    implementation(project(":klass-tree-graph-core"))
+    implementation(project(":klass-tree-graph-dot"))
 
     // The Analysis API is provided by the Gradle plugin's isolated analysis configuration at
     // runtime, so it is not exposed as a transitive dependency of the plugin.

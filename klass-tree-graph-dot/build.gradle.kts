@@ -3,7 +3,7 @@ plugins {
 }
 
 dependencies {
-    api(project(":graph-core"))
+    api(project(":klass-tree-graph-core"))
 
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
