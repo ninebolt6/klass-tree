@@ -60,11 +60,16 @@ internal data class PropertyCandidate(override val element: PsiElement) : Refere
 internal data class CallableReferenceCandidate(override val element: KtCallableReferenceExpression) : ReferenceCandidate
 internal data class OperatorCandidate(override val element: KtResolvableCall) : ReferenceCandidate
 
-// Java candidates; the PSI type drives which resolve() entry point applies.
-internal data class JavaCallCandidate(override val element: PsiElement) : ReferenceCandidate
+/**
+ * Java candidates; resolution uses Java PSI `resolve()` entry points instead of the Kotlin
+ * Analysis API, so they are delegated to [JavaCandidateResolver] as a group.
+ */
+internal sealed interface JavaCandidate : ReferenceCandidate
+
+internal data class JavaCallCandidate(override val element: PsiElement) : JavaCandidate
 
 /** Java code references resolved to a class with a fixed edge kind. */
-internal sealed interface JavaTypeRefCandidate : ReferenceCandidate {
+internal sealed interface JavaTypeRefCandidate : JavaCandidate {
     override val element: PsiJavaCodeReferenceElement
     val kind: EdgeKind
 }
@@ -77,10 +82,10 @@ internal data class JavaInheritanceCandidate(override val element: PsiJavaCodeRe
     override val kind: EdgeKind get() = EdgeKind.INHERITANCE
 }
 
-internal data class JavaAnnotationCandidate(override val element: PsiAnnotation) : ReferenceCandidate
-internal data class JavaPropertyCandidate(override val element: PsiReferenceExpression) : ReferenceCandidate
-internal data class JavaMethodRefCandidate(override val element: PsiMethodReferenceExpression) : ReferenceCandidate
-internal data class JavaLambdaCandidate(override val element: PsiLambdaExpression) : ReferenceCandidate
+internal data class JavaAnnotationCandidate(override val element: PsiAnnotation) : JavaCandidate
+internal data class JavaPropertyCandidate(override val element: PsiReferenceExpression) : JavaCandidate
+internal data class JavaMethodRefCandidate(override val element: PsiMethodReferenceExpression) : JavaCandidate
+internal data class JavaLambdaCandidate(override val element: PsiLambdaExpression) : JavaCandidate
 
 /**
  * Enumerates PSI locations that may represent dependencies. Resolution is deliberately kept out

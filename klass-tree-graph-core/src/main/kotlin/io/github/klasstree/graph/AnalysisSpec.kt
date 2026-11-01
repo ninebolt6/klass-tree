@@ -32,3 +32,7 @@ data class ModuleSpec(
     /** Ids of other [ModuleSpec]s this module depends on. */
     val dependencies: List<String> = emptyList(),
 )
+
+/** Label used for the `module` field of [GraphNode]: project path without the leading colon. */
+val ModuleSpec.moduleLabel: String
+    get() = projectPath.removePrefix(":").ifEmpty { "root" }

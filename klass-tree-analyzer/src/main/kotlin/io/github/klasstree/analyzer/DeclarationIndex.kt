@@ -10,8 +10,8 @@ import io.github.klasstree.graph.CallSite
 import io.github.klasstree.graph.EdgeKind
 import io.github.klasstree.graph.GraphBuilder
 import io.github.klasstree.graph.GraphNode
-import io.github.klasstree.graph.ModuleSpec
 import io.github.klasstree.graph.NodeKind
+import io.github.klasstree.graph.moduleLabel
 import org.jetbrains.kotlin.analysis.api.symbols.KaClassLikeSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaConstructorSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaSymbol
@@ -246,6 +246,3 @@ internal class DeclarationIndex(
         return (lineIndex + 1) to (safeOffset - lineStart + 1)
     }
 }
-
-internal val ModuleSpec.moduleLabel: String
-    get() = projectPath.removePrefix(":").ifEmpty { "root" }

@@ -1,13 +1,5 @@
 package io.github.klasstree.graph
 
-import kotlinx.serialization.json.Json
-
-val KlassTreeJson: Json = Json {
-    prettyPrint = true
-    encodeDefaults = true
-    explicitNulls = false
-}
-
 private data class EdgeKey(val from: String, val to: String, val kind: EdgeKind)
 
 /**

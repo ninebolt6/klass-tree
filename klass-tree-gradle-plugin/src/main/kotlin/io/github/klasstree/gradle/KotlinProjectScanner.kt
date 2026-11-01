@@ -1,6 +1,5 @@
 package io.github.klasstree.gradle
 
-import kotlinx.serialization.Serializable
 import org.gradle.api.Project
 import org.gradle.api.artifacts.ProjectDependency
 import org.gradle.api.artifacts.component.ProjectComponentIdentifier
@@ -9,18 +8,6 @@ import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmExtension
 import org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType
 import java.io.File
-
-@Serializable
-internal data class AnalysisModuleCandidate(
-    val projectPath: String,
-    val sourceSetName: String,
-    val moduleId: String,
-    val moduleName: String,
-    val sourceRoots: List<String>,
-    val classpath: List<String>,
-    val projectDependencyPaths: List<String>,
-    val associatedModuleIds: List<String>,
-)
 
 internal data class KotlinProjectScan(
     val sourceDirectories: List<File>,
