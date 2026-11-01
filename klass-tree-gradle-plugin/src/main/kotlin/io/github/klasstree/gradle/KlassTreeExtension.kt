@@ -1,6 +1,7 @@
 package io.github.klasstree.gradle
 
 import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.SetProperty
@@ -30,12 +31,26 @@ abstract class KlassTreeExtension {
     /** Extra JVM arguments for the forked analyzer process. */
     abstract val analyzerJvmArgs: ListProperty<String>
 
+    /**
+     * Committed baseline graph that `klassTreeCheck` compares against. Produce it by running
+     * `klassTree` and checking the resulting `graph.json` into version control under this name.
+     */
+    abstract val baselineFile: RegularFileProperty
+
+    /**
+     * fqName/package prefixes that must not gain new references relative to the baseline, for
+     * example `com.example.legacy`. Only edges or call sites absent from the baseline count as
+     * violations, so the baseline freezes the current state while migration shrinks it.
+     */
+    abstract val deniedTargets: ListProperty<String>
+
     init {
         includeTests.convention(false)
         formats.convention(setOf("json", "dot"))
         analysisApiVersion.convention(DEFAULT_ANALYSIS_API_VERSION)
         failOnAnalysisError.convention(false)
         analyzerJvmArgs.convention(emptyList())
+        deniedTargets.convention(emptyList())
     }
 
     companion object {

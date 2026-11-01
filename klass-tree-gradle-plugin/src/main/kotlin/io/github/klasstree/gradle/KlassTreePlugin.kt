@@ -27,6 +27,7 @@ class KlassTreePlugin : Plugin<Project> {
 
         val extension = project.extensions.create("klassTree", KlassTreeExtension::class.java)
         extension.outputDirectory.convention(project.layout.buildDirectory.dir("klass-tree"))
+        extension.baselineFile.convention(project.layout.projectDirectory.file("klass-tree-baseline.json"))
 
         val analyzerConfiguration = project.configurations.create("klassTreeAnalyzer") { configuration ->
             configuration.isCanBeConsumed = false
@@ -81,6 +82,18 @@ class KlassTreePlugin : Plugin<Project> {
             task.projectRoot.set(project.rootProject.projectDir.absolutePath)
             task.failOnAnalysisError.set(extension.failOnAnalysisError)
             task.includeTests.set(extension.includeTests)
+        }
+
+        project.tasks.register("klassTreeCheck", KlassTreeCheckTask::class.java) { checkTask ->
+            checkTask.group = "verification"
+            checkTask.description =
+                "Compares graph.json with the baseline and fails on new references to denied targets."
+            checkTask.graphJson.set(task.flatMap { it.outputDirectory.file("graph.json") })
+            checkTask.baselineFile.set(extension.baselineFile)
+            checkTask.baselineInputs.from(extension.baselineFile)
+            checkTask.deniedTargets.set(extension.deniedTargets)
+            checkTask.diffFile.set(extension.outputDirectory.file("klass-tree-diff.json"))
+            checkTask.dependsOn(task)
         }
 
         val projectScans = mutableMapOf<String, KotlinProjectScan>()

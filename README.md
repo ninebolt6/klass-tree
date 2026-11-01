@@ -76,8 +76,39 @@ klassTree {
 
     // Extra JVM arguments for the forked analyzer process, for example ["-Xmx2g"]. Default: [].
     analyzerJvmArgs.set(emptyList())
+
+    // Baseline graph that klassTreeCheck compares against. Commit a graph.json under this name to
+    // freeze the current state. Default: klass-tree-baseline.json in the root project.
+    baselineFile.set(layout.projectDirectory.file("klass-tree-baseline.json"))
+
+    // fqName/package prefixes that must not gain new references relative to the baseline, for
+    // example "com.example.legacy". Existing edges are frozen by the baseline, not denied outright.
+    deniedTargets.set(listOf("com.example.legacy"))
 }
 ```
+
+## Checking dependency regressions
+
+`klassTreeCheck` compares `graph.json` with the committed baseline and fails when new references
+to `deniedTargets` appear. It always writes the full diff to `klass-tree-diff.json` next to the
+graph so CI can archive it.
+
+```shell
+./gradlew klassTree                                   # 1. produce graph.json
+cp build/klass-tree/graph.json klass-tree-baseline.json  # 2. freeze as the baseline, commit it
+./gradlew klassTreeCheck                              # 3. run in CI from then on
+```
+
+Violations list each new crossing with its call site:
+
+```text
+klass-tree: 2 new reference(s) to denied targets [com.example.legacy]:
+    + com.example.api.Service -> com.example.legacy.GodClass CONSTRUCTOR_CALL @ api/Service.kt:14
+```
+
+Only references *absent from the baseline* count, so pre-existing dependencies never fail; removed
+references are reported as progress. This is the intended workflow for shrinking a monolithic
+module: declare the code being phased out as a denied target and let CI enforce the ratchet.
 
 ## What is analyzed
 
