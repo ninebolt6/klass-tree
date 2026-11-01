@@ -108,6 +108,7 @@ abstract class KlassTreeTask : DefaultTask() {
                 formats.get().sorted().joinToString(","),
             )
             analyzerJvmArgs.get().forEach(spec::jvmArgs)
+            spec.isIgnoreExitValue = true
         }
 
         if (result.exitValue != 0) {

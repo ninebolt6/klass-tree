@@ -122,6 +122,73 @@ class KlassTreeFunctionalTest {
     }
 
     @Test
+    fun `klassTree writes output to build-klass-tree without any extension configuration`() {
+        write(
+            "settings.gradle.kts",
+            """
+                pluginManagement {
+                    repositories {
+                        mavenCentral()
+                        gradlePluginPortal()
+                    }
+                }
+
+                dependencyResolutionManagement {
+                    repositories {
+                        mavenCentral()
+                    }
+                }
+
+                rootProject.name = "klass-tree-functional"
+            """,
+        )
+        write(
+            "build.gradle.kts",
+            """
+                plugins {
+                    id("org.jetbrains.kotlin.jvm")
+                    id("io.github.klass-tree")
+                }
+            """,
+        )
+        write(
+            "src/main/kotlin/p/P.kt",
+            """
+                package p
+
+                class P
+            """,
+        )
+
+        runner("klassTree").build()
+
+        assertTrue(projectDir.resolve("build/klass-tree/graph.json").toFile().exists())
+        assertTrue(projectDir.resolve("build/klass-tree/graph.dot").toFile().exists())
+    }
+
+    @Test
+    fun `klassTree forwards analyzerJvmArgs to the forked analyzer`() {
+        writeProject()
+        write(
+            "build.gradle.kts",
+            """
+                plugins {
+                    id("org.jetbrains.kotlin.jvm") apply false
+                    id("io.github.klass-tree")
+                }
+
+                klassTree {
+                    analyzerJvmArgs.set(listOf("-Xmx8m"))
+                }
+            """,
+        )
+
+        val result = runner("klassTree").buildAndFail()
+
+        assertTrue(result.output.contains("exit code"))
+    }
+
+    @Test
     fun `klassTree fails when there are no Kotlin sources`() {
         writeProject(withSources = false)
 

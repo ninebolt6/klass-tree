@@ -26,6 +26,7 @@ class KlassTreePlugin : Plugin<Project> {
         }
 
         val extension = project.extensions.create("klassTree", KlassTreeExtension::class.java)
+        extension.outputDirectory.convention(project.layout.buildDirectory.dir("klass-tree"))
 
         val analyzerConfiguration = project.configurations.create("klassTreeAnalyzer") { configuration ->
             configuration.isCanBeConsumed = false
