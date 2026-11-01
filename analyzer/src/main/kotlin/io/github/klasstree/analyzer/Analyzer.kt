@@ -138,9 +138,15 @@ class Analyzer {
                     val fileInfos = collectFileInfos(session, spec)
                     val builder = GraphBuilder()
                     val index = DeclarationIndex(builder)
-                    fileInfos.forEach(index::indexFile)
-
                     val stats = MutableResolutionStats()
+
+                    fileInfos.forEach { info ->
+                        try {
+                            index.indexFile(info)
+                        } catch (throwable: Throwable) {
+                            if (!recordFileError(info, throwable, stats)) throw throwable
+                        }
+                    }
                     fileInfos.forEach { info -> analyzeFile(info, index, stats) }
 
                     val resolution = stats.toImmutable()
@@ -202,10 +208,9 @@ class Analyzer {
         index: DeclarationIndex,
         stats: MutableResolutionStats,
     ) {
-        val candidates = ReferenceCollector.collect(info.file)
-        if (candidates.isEmpty()) return
-
         try {
+            val candidates = ReferenceCollector.collect(info.file)
+            if (candidates.isEmpty()) return
             analyze(info.file) {
                 for (candidate in candidates) {
                     try {
@@ -227,15 +232,27 @@ class Analyzer {
                     }
                 }
             }
-        } catch (exception: Exception) {
-            stats.analysisErrors += buildString {
-                append(info.relativePath)
-                append(": ")
-                append(exception::class.simpleName)
-                append(": ")
-                append(exception.message)
-            }
+        } catch (throwable: Throwable) {
+            if (!recordFileError(info, throwable, stats)) throw throwable
         }
+    }
+
+    // Whole-file isolation covers ordinary exceptions plus StackOverflowErrors from deeply
+    // recursive PSI or FIR structures; other Errors such as OOM still abort the analysis.
+    private fun recordFileError(
+        info: SourceFileInfo,
+        throwable: Throwable,
+        stats: MutableResolutionStats,
+    ): Boolean {
+        if (throwable !is Exception && throwable !is StackOverflowError) return false
+        stats.analysisErrors += buildString {
+            append(info.relativePath)
+            append(": ")
+            append(throwable::class.simpleName)
+            append(": ")
+            append(throwable.message)
+        }
+        return true
     }
 
     context(session: KaSession)
