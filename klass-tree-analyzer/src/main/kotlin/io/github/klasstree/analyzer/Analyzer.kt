@@ -31,6 +31,8 @@ import org.jetbrains.kotlin.analysis.api.session.analyze
 import org.jetbrains.kotlin.analysis.api.standalone.StandaloneAnalysisAPISession
 import org.jetbrains.kotlin.analysis.api.standalone.buildStandaloneAnalysisAPISession
 import org.jetbrains.kotlin.analysis.api.standalone.disposeGlobalStandaloneApplicationServices
+import org.jetbrains.kotlin.analysis.api.standalone.StandaloneWorkaroundApi
+import org.jetbrains.kotlin.analysis.api.standalone.projectStructure.StandaloneLibraryScopeConstructionMode
 import org.jetbrains.kotlin.analysis.api.symbols.KaClassLikeSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaConstructorSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaJavaFieldSymbol
@@ -57,7 +59,7 @@ import java.time.Instant
  * This class is intentionally only referenced from the analyzer's own `main` (which the Gradle
  * plugin launches in a separate JVM). The Gradle daemon never loads Analysis API classes.
  */
-@OptIn(KaExperimentalApi::class)
+@OptIn(KaExperimentalApi::class, StandaloneWorkaroundApi::class)
 class Analyzer {
     fun analyze(spec: AnalysisSpec, disposeGlobalServices: Boolean = false): DependencyGraph {
         require(spec.modules.isNotEmpty()) {
@@ -67,11 +69,16 @@ class Analyzer {
         val disposable = Disposer.newDisposable("klass-tree-analysis")
         try {
             val session = buildStandaloneAnalysisAPISession(projectDisposable = disposable) {
+                // KT-70489: FIR/PSI caches must be dropped during long analyses on monolith inputs.
+                enableCacheCleaner()
                 buildKtModuleProvider {
                     platform = JvmPlatforms.defaultJvmPlatform
+                    // KT-71706: the default scope enumerates every library class file and balloons heap.
+                    val scopeMode = StandaloneLibraryScopeConstructionMode.Trie
                     val sdk = buildKtSdkModule {
                         platform = JvmPlatforms.defaultJvmPlatform
                         addBinaryRootsFromJdkHome(Path.of(System.getProperty("java.home")), isJre = false)
+                        libraryScopeConstructionMode = scopeMode
                         libraryName = "JDK"
                     }
 
@@ -90,6 +97,7 @@ class Analyzer {
                             buildKtLibraryModule {
                                 platform = JvmPlatforms.defaultJvmPlatform
                                 libraryName = "lib:${builtLibraries.size}"
+                                libraryScopeConstructionMode = scopeMode
                                 addBinaryRoots(listOf(path))
                             }
                         }
