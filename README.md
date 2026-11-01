@@ -165,7 +165,6 @@ analyzer's run summary instead.
 
 ```json
 {
-  "schemaVersion": 1,
   "generator": "klass-tree",
   "generatedAt": "2026-11-01T04:45:27.409574Z",
   "projectRoot": "/absolute/path/to/project",
