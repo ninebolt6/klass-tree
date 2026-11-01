@@ -92,8 +92,6 @@ abstract class KlassTreeTask : DefaultTask() {
         val spec = AnalysisSpec(
             projectRoot = projectRoot.get(),
             modules = modules,
-            includeExternalSymbols = false,
-            includeJavaSources = false,
             failOnAnalysisError = failOnAnalysisError.get(),
         )
         val output = outputDirectory.get().asFile

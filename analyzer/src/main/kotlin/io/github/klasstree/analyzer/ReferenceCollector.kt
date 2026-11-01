@@ -5,10 +5,12 @@ import org.jetbrains.kotlin.psi.KtAnnotationEntry
 import org.jetbrains.kotlin.psi.KtArrayAccessExpression
 import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtCallableReferenceExpression
+import org.jetbrains.kotlin.psi.KtForExpression
 import org.jetbrains.kotlin.psi.KtImportDirective
 import org.jetbrains.kotlin.psi.KtLabelReferenceExpression
 import org.jetbrains.kotlin.psi.KtNameReferenceExpression
 import org.jetbrains.kotlin.psi.KtOperationReferenceExpression
+import org.jetbrains.kotlin.psi.KtPropertyDelegate
 import org.jetbrains.kotlin.psi.KtQualifiedExpression
 import org.jetbrains.kotlin.psi.KtSuperTypeListEntry
 import org.jetbrains.kotlin.psi.KtTreeVisitorVoid
@@ -78,6 +80,19 @@ internal object ReferenceCollector {
             override fun visitArrayAccessExpression(expression: KtArrayAccessExpression) {
                 result += OperatorCandidate(expression)
                 super.visitArrayAccessExpression(expression)
+            }
+
+            // `by Delegate()` resolves to implicit getValue/setValue operator calls; the delegate
+            // expression itself is still collected as a normal call below.
+            override fun visitPropertyDelegate(propertyDelegate: KtPropertyDelegate) {
+                result += OperatorCandidate(propertyDelegate)
+                super.visitPropertyDelegate(propertyDelegate)
+            }
+
+            // `for (x in expr)` resolves to implicit iterator/hasNext/next operator calls.
+            override fun visitForExpression(forExpression: KtForExpression) {
+                result += OperatorCandidate(forExpression)
+                super.visitForExpression(forExpression)
             }
 
             override fun visitReferenceExpression(expression: org.jetbrains.kotlin.psi.KtReferenceExpression) {

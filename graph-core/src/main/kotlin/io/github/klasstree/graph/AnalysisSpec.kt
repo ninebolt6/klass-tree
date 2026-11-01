@@ -10,8 +10,6 @@ import kotlinx.serialization.Serializable
 data class AnalysisSpec(
     val projectRoot: String,
     val modules: List<ModuleSpec>,
-    val includeExternalSymbols: Boolean = false,
-    val includeJavaSources: Boolean = false,
     /** When true, any per-file analysis error fails the analyzer process. */
     val failOnAnalysisError: Boolean = false,
 )

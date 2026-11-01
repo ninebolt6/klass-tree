@@ -277,6 +277,53 @@ class AnalyzerTest {
         assertTrue(fileScopeNodes.single().sourceFile?.endsWith("TopLevel.kt") == true)
     }
 
+    @Test
+    fun `desugared calls and template references produce edges`() {
+        val graph = analyze(
+            module(
+                ":app:main",
+                "Model.kt" to """
+                package com.example
+
+                import com.example.Registry.count
+
+                object Registry {
+                    val count = 0
+                }
+
+                class Delegate {
+                    operator fun getValue(thisRef: Any?, property: kotlin.reflect.KProperty<*>) = 0
+                }
+
+                class Items : Iterable<String> {
+                    override fun iterator() = emptyList<String>().iterator()
+                }
+
+                class Uses {
+                    val delegated by Delegate()
+                    fun total(): Int {
+                        var t = 0
+                        for (x in Items()) t++
+                        return t
+                    }
+                    fun label() = "count: ${'$'}count"
+                }
+                """,
+            ),
+        )
+
+        assertNotNull(
+            edge(graph, "com.example.Uses", "com.example.Delegate", EdgeKind.OPERATOR_OR_SYNTHETIC_CALL),
+        )
+        assertNotNull(
+            edge(graph, "com.example.Uses", "com.example.Items", EdgeKind.OPERATOR_OR_SYNTHETIC_CALL),
+        )
+        assertNotNull(
+            edge(graph, "com.example.Uses", "com.example.Registry", EdgeKind.PROPERTY_ACCESS),
+        )
+        assertEquals(emptyList(), graph.stats.resolution.analysisErrors)
+    }
+
     private fun module(
         id: String,
         vararg sources: Pair<String, String>,
