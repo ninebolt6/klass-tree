@@ -178,7 +178,6 @@ class Analyzer {
         session: StandaloneAnalysisAPISession,
         spec: AnalysisSpec,
     ): List<SourceFileInfo> {
-        val specsByName = spec.modules.associateBy { it.moduleName }
         val filesByModuleName = session.modulesWithFiles.mapKeys { (module, _) -> module.name }
         val projectRoot = Path.of(spec.projectRoot).toAbsolutePath().normalize()
         val result = mutableListOf<SourceFileInfo>()
