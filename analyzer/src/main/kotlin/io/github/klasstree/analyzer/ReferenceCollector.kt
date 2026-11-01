@@ -5,6 +5,7 @@ import org.jetbrains.kotlin.psi.KtAnnotationEntry
 import org.jetbrains.kotlin.psi.KtArrayAccessExpression
 import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtCallableReferenceExpression
+import org.jetbrains.kotlin.psi.KtDestructuringDeclarationEntry
 import org.jetbrains.kotlin.psi.KtForExpression
 import org.jetbrains.kotlin.psi.KtImportDirective
 import org.jetbrains.kotlin.psi.KtLabelReferenceExpression
@@ -93,6 +94,12 @@ internal object ReferenceCollector {
             override fun visitForExpression(forExpression: KtForExpression) {
                 result += OperatorCandidate(forExpression)
                 super.visitForExpression(forExpression)
+            }
+
+            // `val (a, b) = pair` resolves each entry to an implicit componentN operator call.
+            override fun visitDestructuringDeclarationEntry(entry: KtDestructuringDeclarationEntry) {
+                result += OperatorCandidate(entry)
+                super.visitDestructuringDeclarationEntry(entry)
             }
 
             override fun visitReferenceExpression(expression: org.jetbrains.kotlin.psi.KtReferenceExpression) {

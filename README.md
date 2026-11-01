@@ -121,7 +121,7 @@ sorted by file, line, and column.
 | `PROPERTY_ACCESS` | Resolved property reads/writes and qualified property accesses |
 | `CALLABLE_REFERENCE` | Callable references such as `User::displayName` |
 | `ANNOTATION` | Annotation usages |
-| `OPERATOR_OR_SYNTHETIC_CALL` | Operator conventions, array access, delegated-property access, for-loop iteration, and synthetic calls |
+| `OPERATOR_OR_SYNTHETIC_CALL` | Operator conventions, array access, delegated-property access, for-loop iteration, destructuring `componentN`, and synthetic calls |
 
 Generated members are skipped except constructors (so `Foo()` and `@Foo` connect to their class).
 Library, Java-source, package, type-parameter, and local symbols do not produce edges; they are

@@ -299,12 +299,21 @@ class AnalyzerTest {
                     override fun iterator() = emptyList<String>().iterator()
                 }
 
+                class Parts {
+                    operator fun component1() = "x"
+                    operator fun component2() = 1
+                }
+
                 class Uses {
                     val delegated by Delegate()
                     fun total(): Int {
                         var t = 0
                         for (x in Items()) t++
                         return t
+                    }
+                    fun split(): Int {
+                        val (name, num) = Parts()
+                        return num
                     }
                     fun label() = "count: ${'$'}count"
                 }
@@ -317,6 +326,9 @@ class AnalyzerTest {
         )
         assertNotNull(
             edge(graph, "com.example.Uses", "com.example.Items", EdgeKind.OPERATOR_OR_SYNTHETIC_CALL),
+        )
+        assertNotNull(
+            edge(graph, "com.example.Uses", "com.example.Parts", EdgeKind.OPERATOR_OR_SYNTHETIC_CALL),
         )
         assertNotNull(
             edge(graph, "com.example.Uses", "com.example.Registry", EdgeKind.PROPERTY_ACCESS),
