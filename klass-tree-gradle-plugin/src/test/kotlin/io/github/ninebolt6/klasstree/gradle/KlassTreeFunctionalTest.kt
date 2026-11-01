@@ -384,6 +384,16 @@ class KlassTreeFunctionalTest {
     }
 
     @Test
+    fun `klassTreeBaseline and klassTreeCheck run in the same invocation`() {
+        writeProject()
+
+        val result = runner("klassTreeBaseline", "klassTreeCheck").build()
+
+        assertTrue(result.task(":klassTreeBaseline")?.outcome == TaskOutcome.SUCCESS)
+        assertTrue(result.task(":klassTreeCheck")?.outcome == TaskOutcome.SUCCESS)
+    }
+
+    @Test
     fun `klassTreeCheck passes against a baseline written by klassTreeBaseline`() {
         writeProject(klassTreeConfig = """deniedTargets.set(listOf("shared"))""")
 

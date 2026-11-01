@@ -71,6 +71,16 @@ class KlassTreePlugin : Plugin<Project> {
             task.includeJavaSources.set(extension.includeJavaSources)
         }
 
+        val baselineTask =
+            project.tasks.register("klassTreeBaseline", KlassTreeBaselineTask::class.java) { baselineTask ->
+                baselineTask.group = "verification"
+                baselineTask.description =
+                    "Writes graph.json as the baseline that klassTreeCheck compares against."
+                baselineTask.graphJson.set(task.flatMap { it.outputDirectory.file("graph.json") })
+                baselineTask.baselineFile.set(extension.baselineFile)
+                baselineTask.dependsOn(task)
+            }
+
         project.tasks.register("klassTreeCheck", KlassTreeCheckTask::class.java) { checkTask ->
             checkTask.group = "verification"
             checkTask.description =
@@ -81,15 +91,9 @@ class KlassTreePlugin : Plugin<Project> {
             checkTask.deniedTargets.set(extension.deniedTargets)
             checkTask.diffFile.set(extension.outputDirectory.file("klass-tree-diff.json"))
             checkTask.dependsOn(task)
-        }
-
-        project.tasks.register("klassTreeBaseline", KlassTreeBaselineTask::class.java) { baselineTask ->
-            baselineTask.group = "verification"
-            baselineTask.description =
-                "Writes graph.json as the baseline that klassTreeCheck compares against."
-            baselineTask.graphJson.set(task.flatMap { it.outputDirectory.file("graph.json") })
-            baselineTask.baselineFile.set(extension.baselineFile)
-            baselineTask.dependsOn(task)
+            // Ordering, not a dependency: regenerating the baseline must never become a
+            // prerequisite of checking it.
+            checkTask.mustRunAfter(baselineTask)
         }
 
         val projectScans = mutableMapOf<String, KotlinProjectScan>()
