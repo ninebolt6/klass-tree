@@ -69,6 +69,24 @@ class DotExporterTest {
     }
 
     @Test
+    fun `dot keeps modules separate when sanitized cluster names collide`() {
+        val nodes = listOf("a-b", "a_b").map { module ->
+            GraphNode(
+                id = "$module:src/X.kt#CLASS:p.X$module",
+                kind = NodeKind.CLASS,
+                name = "X",
+                module = module,
+                sourceSet = "main",
+            )
+        }
+        val dot = DotExporter.render(graph.copy(nodes = nodes, edges = emptyList()))
+
+        assertTrue(dot.contains("subgraph cluster_a_b {"))
+        assertTrue(dot.contains("subgraph cluster_a_b_2 {"))
+        assertTrue(Regex("subgraph cluster_").findAll(dot).count() == 2)
+    }
+
+    @Test
     fun `dot escapes quotes and backslashes`() {
         val node = GraphNode(
             id = "id\"with\\special",

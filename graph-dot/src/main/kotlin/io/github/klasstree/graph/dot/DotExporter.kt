@@ -21,8 +21,9 @@ object DotExporter {
         appendLine()
 
         val byModule = graph.nodes.groupBy { it.module }
+        val usedClusterIds = HashSet<String>()
         byModule.toSortedMap().forEach { (module, moduleNodes) ->
-            appendLine("  subgraph ${clusterId(module)} {")
+            appendLine("  subgraph ${uniqueClusterId(module, usedClusterIds)} {")
             appendLine("    label=${quote(module)};")
             appendLine("    style=\"rounded,dashed\";")
             appendLine("    color=\"#b0b0b0\";")
@@ -95,8 +96,14 @@ object DotExporter {
         EdgeKind.OPERATOR_OR_SYNTHETIC_CALL -> "#6b7280"
     }
 
-    private fun clusterId(module: String): String =
-        "cluster_" + module.replace(Regex("[^A-Za-z0-9_]"), "_")
+    // Sanitized module names can collide (a-b and a_b both give cluster_a_b); suffix on repeat.
+    private fun uniqueClusterId(module: String, used: MutableSet<String>): String {
+        val base = "cluster_" + module.replace(Regex("[^A-Za-z0-9_]"), "_")
+        var candidate = base
+        var suffix = 2
+        while (!used.add(candidate)) candidate = "${base}_${suffix++}"
+        return candidate
+    }
 
     private fun quote(value: String): String = buildString {
         append('"')
