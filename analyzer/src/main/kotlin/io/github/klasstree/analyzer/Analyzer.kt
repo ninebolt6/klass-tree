@@ -106,8 +106,13 @@ class Analyzer {
                                 addRegularDependency(sdk)
                                 libraryPaths.forEach { addRegularDependency(libraryFor(it)) }
                                 moduleSpec.dependencies.forEach { dependencyId ->
-                                    if (specsById.containsKey(dependencyId)) {
-                                        addRegularDependency(buildSourceModule(dependencyId))
+                                    val dependencySpec = specsById[dependencyId] ?: return@forEach
+                                    val dependency = buildSourceModule(dependencyId)
+                                    addRegularDependency(dependency)
+                                    // Source sets of one project see each other's internal
+                                    // declarations, like Kotlin's friend paths for test→main.
+                                    if (dependencySpec.projectPath == moduleSpec.projectPath) {
+                                        addFriendDependency(dependency)
                                     }
                                 }
                             }

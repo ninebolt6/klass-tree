@@ -421,6 +421,43 @@ class AnalyzerTest {
         }
     }
 
+    @Test
+    fun `test sources see internal members of their own main like Kotlin friend paths`() {
+        val graph = analyze(
+            module(
+                ":app:main",
+                "Main.kt" to """
+                package com.example
+
+                internal fun internalHelper() = 1
+                class Pub { fun p() = internalHelper() }
+                """,
+            ),
+            module(
+                ":app:test",
+                "Test.kt" to """
+                package com.example
+
+                class AppTest {
+                    fun t() = internalHelper()
+                }
+                """,
+                dependencies = listOf(":app:main"),
+            ),
+        )
+
+        val mainScope = graph.nodes.single {
+            it.kind == NodeKind.FILE_SCOPE && it.sourceSet == "main"
+        }
+        val test = graph.nodes.single { it.fqName == "com.example.AppTest" }
+        assertNotNull(
+            graph.edges.singleOrNull {
+                it.from == test.id && it.to == mainScope.id && it.kind == EdgeKind.FUNCTION_CALL
+            },
+        )
+        assertEquals(0, graph.stats.resolution.unresolved)
+    }
+
     private fun module(
         id: String,
         vararg sources: Pair<String, String>,
