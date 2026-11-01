@@ -68,7 +68,6 @@ internal sealed interface JavaCandidate : ReferenceCandidate
 
 internal data class JavaCallCandidate(override val element: PsiElement) : JavaCandidate
 
-/** Java code references resolved to a class with a fixed edge kind. */
 internal sealed interface JavaTypeRefCandidate : JavaCandidate {
     override val element: PsiJavaCodeReferenceElement
     val kind: EdgeKind

@@ -16,11 +16,6 @@ import org.jetbrains.kotlin.platform.jvm.JvmPlatforms
 import java.nio.file.Files
 import java.nio.file.Path
 
-/**
- * Builds the standalone Analysis API session and the source-module graph for
- * [AnalysisSpec.modules]. Each module gets the JDK SDK, one shared library module per normalized
- * classpath entry, and regular/friend dependencies derived from the spec.
- */
 @OptIn(KaExperimentalApi::class, StandaloneWorkaroundApi::class)
 internal fun buildAnalysisSession(
     spec: AnalysisSpec,

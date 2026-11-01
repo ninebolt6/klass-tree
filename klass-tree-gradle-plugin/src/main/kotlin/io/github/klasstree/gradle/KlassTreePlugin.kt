@@ -10,11 +10,9 @@ import org.gradle.api.attributes.Usage
 import org.gradle.api.attributes.java.TargetJvmEnvironment
 
 /**
- * Root-project plugin that analyzes every Kotlin JVM subproject and writes a source dependency
- * graph to `build/klass-tree/graph.json` (and, by default, a DOT rendering derived from it).
- *
- * The plugin registers one aggregate task. Applying it to a non-root project is rejected because
- * source set names and output paths would otherwise be ambiguous.
+ * Root-project plugin writing a source dependency graph for all Kotlin JVM subprojects. Applying
+ * it to a non-root project is rejected because source set names and output paths would otherwise
+ * be ambiguous.
  */
 class KlassTreePlugin : Plugin<Project> {
     override fun apply(project: Project) {

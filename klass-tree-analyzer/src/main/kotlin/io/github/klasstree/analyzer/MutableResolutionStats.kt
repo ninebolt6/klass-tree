@@ -2,10 +2,6 @@ package io.github.klasstree.analyzer
 
 import io.github.klasstree.graph.ResolutionStats
 
-/**
- * Running counters updated while candidates are resolved; converted to the immutable
- * [ResolutionStats] once the analysis finishes.
- */
 internal class MutableResolutionStats {
     var candidates: Int = 0
     var resolvedSource: Int = 0

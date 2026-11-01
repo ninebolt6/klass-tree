@@ -7,10 +7,6 @@ import io.github.klasstree.graph.NodeKind
 import java.nio.file.Files
 import java.nio.file.Path
 
-/**
- * Renders the graph as Graphviz DOT. Nodes are grouped into clusters by Gradle module so the
- * output is readable for a multi-module project.
- */
 object DotExporter {
     fun render(graph: DependencyGraph): String = buildString {
         appendLine("digraph klass_tree {")

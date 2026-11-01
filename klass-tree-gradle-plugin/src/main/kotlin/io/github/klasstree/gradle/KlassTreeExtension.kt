@@ -15,25 +15,15 @@ import javax.inject.Inject
  * that the plugin can be configured from either the Kotlin or Groovy DSL.
  */
 abstract class KlassTreeExtension @Inject constructor(layout: ProjectLayout) {
-    /** Analyze test source sets in addition to `main`. */
     abstract val includeTests: Property<Boolean>
-
-    /** Analyze `.java` sources alongside `.kt`. Disable to skip Java entirely. */
     abstract val includeJavaSources: Property<Boolean>
 
-    /** Output formats. `json` is always written; `dot` is derived from the JSON output. */
+    /** `json` is always written; `dot` is derived from the JSON output. */
     abstract val formats: SetProperty<String>
 
-    /** Directory receiving `graph.json`, `graph.dot` and the intermediate analysis spec. */
     abstract val outputDirectory: DirectoryProperty
-
-    /** Version of `org.jetbrains.kotlin:kotlin-analysis-api` used by the forked analyzer. */
     abstract val analysisApiVersion: Property<String>
-
-    /** Fail the build when at least one file could not be analyzed. */
     abstract val failOnAnalysisError: Property<Boolean>
-
-    /** Extra JVM arguments for the forked analyzer process. */
     abstract val analyzerJvmArgs: ListProperty<String>
 
     /**

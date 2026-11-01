@@ -13,9 +13,8 @@ import com.intellij.psi.util.PsiTreeUtil
 import io.github.klasstree.graph.EdgeKind
 
 /**
- * Resolves [JavaCandidate]s through Java PSI `resolve()` calls — the Java counterpart of
- * [CandidateResolver], mirroring [JavaReferenceCollector]. All resolution happens inside the
- * analysis read action; no Kotlin Analysis API session is needed.
+ * Resolves [JavaCandidate]s through Java PSI `resolve()` calls; no Kotlin Analysis API session
+ * is needed.
  */
 internal class JavaCandidateResolver(
     private val index: DeclarationIndex,

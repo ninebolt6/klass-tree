@@ -22,9 +22,8 @@ import org.jetbrains.kotlin.analysis.api.symbols.KaTypeParameterSymbol
 import org.jetbrains.kotlin.resolution.KtResolvable
 
 /**
- * Resolves collected [ReferenceCandidate]s to graph edges. Kotlin candidates go through the
- * Analysis API; [JavaCandidate]s are delegated to [JavaCandidateResolver] as a group.
- * Must be called inside an `analyze` block.
+ * Resolves collected [ReferenceCandidate]s into graph edges. [JavaCandidate]s are delegated to
+ * [JavaCandidateResolver]. Must be called inside an `analyze` block.
  */
 @OptIn(KaExperimentalApi::class)
 internal class CandidateResolver(

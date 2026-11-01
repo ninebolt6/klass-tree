@@ -4,8 +4,6 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * The kind of declaration represented by a [GraphNode].
- *
  * The first version aggregates members into their owning class (or file scope for top-level
  * declarations). Declaration-level nodes can be added later without changing the JSON schema.
  */
@@ -20,7 +18,6 @@ enum class NodeKind {
     FILE_SCOPE,
 }
 
-/** The kind of dependency represented by a [GraphEdge]. */
 @Serializable
 enum class EdgeKind {
     TYPE_REFERENCE,
@@ -34,8 +31,6 @@ enum class EdgeKind {
 }
 
 /**
- * A node in the dependency graph.
- *
  * [id] is stable within one analysis snapshot. It is intentionally not just an FQ name: the
  * module/source set, source path and declaration kind are included so that nested and same-named
  * declarations do not collapse into one node.
@@ -92,7 +87,6 @@ data class GraphStats(
     val resolution: ResolutionStats = ResolutionStats(),
 )
 
-/** The platform-independent graph model produced by the analyzer and consumed by exporters. */
 @Serializable
 data class DependencyGraph(
     val schemaVersion: Int = 1,

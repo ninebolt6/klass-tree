@@ -4,11 +4,6 @@ import com.intellij.psi.PsiElement
 import io.github.klasstree.graph.EdgeKind
 import io.github.klasstree.graph.GraphNode
 
-/**
- * Records an edge to a resolved source declaration: finds the owning node of the reference site,
- * drops self-edges, attaches the call site, and updates the resolution counters. Shared by the
- * Kotlin and Java candidate resolvers.
- */
 internal class EdgeRecorder(
     private val index: DeclarationIndex,
     private val stats: MutableResolutionStats,

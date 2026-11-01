@@ -18,15 +18,8 @@ import java.nio.file.Path
 import java.time.Instant
 
 /**
- * Runs Kotlin Analysis API Standalone over the modules described by [AnalysisSpec] and returns a
- * platform-independent dependency graph.
- *
  * This class is intentionally only referenced from the analyzer's own `main` (which the Gradle
  * plugin launches in a separate JVM). The Gradle daemon never loads Analysis API classes.
- *
- * The heavy lifting lives in dedicated collaborators: [buildAnalysisSession] constructs the
- * session and module graph, [DeclarationIndex] builds the declaration nodes, and
- * [CandidateResolver]/[JavaCandidateResolver] resolve references into edges.
  */
 @OptIn(KaExperimentalApi::class)
 class Analyzer {
