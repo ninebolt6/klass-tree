@@ -27,8 +27,8 @@ abstract class KlassTreeExtension @Inject constructor(layout: ProjectLayout) {
     abstract val analyzerJvmArgs: ListProperty<String>
 
     /**
-     * Committed baseline graph that `klassTreeCheck` compares against. Produce it by running
-     * `klassTree` and checking the resulting `graph.json` into version control under this name.
+     * Committed baseline graph that `klassTreeCheck` compares against; written by
+     * `klassTreeBaseline` and checked into version control.
      */
     abstract val baselineFile: RegularFileProperty
 

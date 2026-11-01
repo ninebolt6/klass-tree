@@ -75,8 +75,8 @@ klassTree {
     // Extra JVM arguments for the forked analyzer process, for example ["-Xmx2g"]. Default: [].
     analyzerJvmArgs.set(emptyList())
 
-    // Baseline graph that klassTreeCheck compares against. Commit a graph.json under this name to
-    // freeze the current state. Default: klass-tree-baseline.json in the root project.
+    // Baseline graph that klassTreeCheck compares against, written by klassTreeBaseline.
+    // Default: klass-tree-baseline.json in the root project.
     baselineFile.set(layout.projectDirectory.file("klass-tree-baseline.json"))
 
     // fqName/package prefixes that must not gain new references relative to the baseline, for
@@ -92,9 +92,8 @@ to `deniedTargets` appear. It always writes the full diff to `klass-tree-diff.js
 graph so CI can archive it.
 
 ```shell
-./gradlew klassTree                                   # 1. produce graph.json
-cp build/klass-tree/graph.json klass-tree-baseline.json  # 2. freeze as the baseline, commit it
-./gradlew klassTreeCheck                              # 3. run in CI from then on
+./gradlew klassTreeBaseline   # 1. freeze the current graph as the baseline; commit the file
+./gradlew klassTreeCheck      # 2. run in CI from then on
 ```
 
 Violations list each new crossing with its call site:

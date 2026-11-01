@@ -49,8 +49,8 @@ abstract class KlassTreeCheckTask : DefaultTask() {
         val baselinePath = baselineFile.get().asFile
         if (!baselinePath.isFile) {
             throw GradleException(
-                "klass-tree: no baseline graph at $baselinePath. Run `./gradlew klassTree` and " +
-                    "commit its graph.json to this path, or set klassTree.baselineFile.",
+                "klass-tree: no baseline graph at $baselinePath. Run `./gradlew " +
+                    "klassTreeBaseline` and commit the result, or set klassTree.baselineFile.",
             )
         }
         val baseline = decode(baselinePath.readText())

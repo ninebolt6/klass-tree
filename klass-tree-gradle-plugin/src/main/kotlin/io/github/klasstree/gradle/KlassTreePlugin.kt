@@ -83,6 +83,15 @@ class KlassTreePlugin : Plugin<Project> {
             checkTask.dependsOn(task)
         }
 
+        project.tasks.register("klassTreeBaseline", KlassTreeBaselineTask::class.java) { baselineTask ->
+            baselineTask.group = "verification"
+            baselineTask.description =
+                "Writes graph.json as the baseline that klassTreeCheck compares against."
+            baselineTask.graphJson.set(task.flatMap { it.outputDirectory.file("graph.json") })
+            baselineTask.baselineFile.set(extension.baselineFile)
+            baselineTask.dependsOn(task)
+        }
+
         val projectScans = mutableMapOf<String, KotlinProjectScan>()
         var scannerError: Throwable? = null
         fun scan(projectToScan: Project) {

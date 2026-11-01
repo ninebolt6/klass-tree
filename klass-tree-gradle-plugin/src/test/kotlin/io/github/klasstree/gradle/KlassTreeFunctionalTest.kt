@@ -371,6 +371,29 @@ class KlassTreeFunctionalTest {
     }
 
     @Test
+    fun `klassTreeBaseline writes the analyzed graph as the baseline`() {
+        writeProject()
+
+        val result = runner("klassTreeBaseline").build()
+
+        assertTrue(result.task(":klassTree")?.outcome == TaskOutcome.SUCCESS)
+        assertTrue(
+            projectDir.resolve("klass-tree-baseline.json").toFile().readText() ==
+                projectDir.resolve("build/klass-tree/graph.json").toFile().readText(),
+        )
+    }
+
+    @Test
+    fun `klassTreeCheck passes against a baseline written by klassTreeBaseline`() {
+        writeProject(klassTreeConfig = """deniedTargets.set(listOf("shared"))""")
+
+        runner("klassTreeBaseline").build()
+        val result = runner("klassTreeCheck").build()
+
+        assertTrue(result.task(":klassTreeCheck")?.outcome == TaskOutcome.SUCCESS)
+    }
+
+    @Test
     fun `klassTreeCheck fails on new references to denied targets`() {
         writeProject(klassTreeConfig = """deniedTargets.set(listOf("shared"))""")
         runner("klassTree").build()
