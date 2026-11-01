@@ -116,7 +116,7 @@ internal object ReferenceCollector {
     }
 
     // These operators have no callable symbol to resolve.
-    private val NON_CALLABLE_OPERATORS = setOf("is", "!is", "as", "as?", "&&", "||", "?:")
+    private val NON_CALLABLE_OPERATORS = setOf("is", "!is", "as", "as?", "&&", "||", "?:", "!!")
 
     private fun shouldCollectType(type: KtUserType): Boolean {
         // Only the outermost user type of a qualified name; resolving every segment would turn

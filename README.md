@@ -172,10 +172,10 @@ counted in `stats.resolution` instead.
     "sourceFileCount": 9,
     "elapsedMillis": 1657,
     "resolution": {
-      "candidates": 148,
+      "candidates": 147,
       "resolvedSource": 56,
       "resolvedExternal": 40,
-      "unresolved": 1,
+      "unresolved": 0,
       "skipped": 51,
       "selfEdgesSkipped": 16,
       "analysisErrors": []
@@ -226,6 +226,9 @@ Outputs go to `fixtures/build/klass-tree/`.
   included builds are not on the analysis classpath because project components are filtered out.
 - Analysis is not incremental within a run: the task re-analyzes all selected modules.
 - The Analysis API version must stay compatible with the Kotlin compiler of the analyzed build.
+- The implicit `Companion` name does not resolve on a companion object declared with an explicit
+  name (Analysis API limitation); such calls are counted in `unresolved`. Use the declared name
+  or `ContainingClass.call()` instead.
 
 ## Development
 

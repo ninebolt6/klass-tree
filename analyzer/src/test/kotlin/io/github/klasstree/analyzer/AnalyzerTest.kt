@@ -357,6 +357,7 @@ class AnalyzerTest {
                     fun b(x: Mid?) = x ?: m
                     fun c(x: Mid?) = x as Mid
                     fun d(a: Boolean, b: Boolean) = a && b
+                    fun e(x: Mid?) = x!!.toString()
                 }
                 """,
             ),
