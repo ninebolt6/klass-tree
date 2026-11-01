@@ -32,7 +32,7 @@ internal object ModuleSpecs {
             )
         }
     }
-
-    private fun moduleId(projectPath: String, sourceSetName: String): String =
-        (if (projectPath == ":") ":" else "$projectPath:") + sourceSetName
 }
+
+internal fun moduleId(projectPath: String, sourceSetName: String): String =
+    (if (projectPath == ":") ":" else "$projectPath:") + sourceSetName

@@ -19,11 +19,13 @@ import io.github.klasstree.graph.AnalysisSpec
 import io.github.klasstree.graph.DependencyGraph
 import io.github.klasstree.graph.EdgeKind
 import io.github.klasstree.graph.GraphBuilder
+import io.github.klasstree.graph.GraphNode
 import io.github.klasstree.graph.ResolutionStats
 import org.jetbrains.kotlin.analysis.api.KaExperimentalApi
 import org.jetbrains.kotlin.analysis.api.KaSession
 import org.jetbrains.kotlin.analysis.api.projectStructure.KaLibraryModule
 import org.jetbrains.kotlin.analysis.api.projectStructure.KaSourceModule
+import org.jetbrains.kotlin.analysis.api.resolution.KaSimpleOrMultiCall
 import org.jetbrains.kotlin.analysis.api.resolution.calls
 import org.jetbrains.kotlin.analysis.api.resolution.resolveSuccessfulCall
 import org.jetbrains.kotlin.analysis.api.resolution.resolveSuccessfulSymbol
@@ -48,6 +50,7 @@ import org.jetbrains.kotlin.analysis.project.structure.builder.buildKtSdkModule
 import org.jetbrains.kotlin.analysis.project.structure.builder.buildKtSourceModule
 import org.jetbrains.kotlin.platform.jvm.JvmPlatforms
 import org.jetbrains.kotlin.psi.KtFile
+import org.jetbrains.kotlin.resolution.KtResolvable
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
@@ -299,44 +302,23 @@ class Analyzer {
     ) {
         stats.candidates++
         when (candidate) {
-            is TypeReferenceCandidate -> {
+            is KotlinSymbolCandidate -> {
                 handleSymbol(
                     symbol = candidate.element.resolveSuccessfulSymbol(),
                     element = candidate.element,
-                    kind = EdgeKind.TYPE_REFERENCE,
-                    index = index,
-                    stats = stats,
-                )
-            }
-
-            is InheritanceCandidate -> {
-                handleSymbol(
-                    symbol = candidate.element.resolveSuccessfulSymbol(),
-                    element = candidate.element,
-                    kind = EdgeKind.INHERITANCE,
+                    kind = candidate.kind,
                     index = index,
                     stats = stats,
                 )
             }
 
             is CallCandidate -> {
-                val call = candidate.element.resolveSuccessfulCall()
-                if (call == null) {
-                    stats.unresolved++
-                    return
-                }
-                for (simpleCall in call.calls) {
-                    val symbol = simpleCall.signature.symbol
-                    val kind = when (symbol) {
+                handleCalls(candidate.element.resolveSuccessfulCall(), candidate.element, index, stats) { symbol ->
+                    when (symbol) {
                         is KaConstructorSymbol -> EdgeKind.CONSTRUCTOR_CALL
                         is KaNamedFunctionSymbol -> EdgeKind.FUNCTION_CALL
                         is KaPropertySymbol -> EdgeKind.PROPERTY_ACCESS
                         else -> null
-                    }
-                    if (kind == null) {
-                        stats.skipped++
-                    } else {
-                        handleSymbol(symbol, candidate.element, kind, index, stats)
                     }
                 }
             }
@@ -352,7 +334,7 @@ class Analyzer {
             }
 
             is PropertyCandidate -> {
-                val resolvable = candidate.element as? org.jetbrains.kotlin.resolution.KtResolvable
+                val resolvable = candidate.element as? KtResolvable
                 if (resolvable == null) {
                     stats.skipped++
                     return
@@ -379,36 +361,14 @@ class Analyzer {
             }
 
             is CallableReferenceCandidate -> {
-                val call = candidate.element.resolveSuccessfulCall()
-                if (call == null) {
-                    stats.unresolved++
-                    return
-                }
-                for (simpleCall in call.calls) {
-                    handleSymbol(
-                        symbol = simpleCall.signature.symbol,
-                        element = candidate.element,
-                        kind = EdgeKind.CALLABLE_REFERENCE,
-                        index = index,
-                        stats = stats,
-                    )
+                handleCalls(candidate.element.resolveSuccessfulCall(), candidate.element, index, stats) {
+                    EdgeKind.CALLABLE_REFERENCE
                 }
             }
 
             is OperatorCandidate -> {
-                val call = candidate.element.resolveSuccessfulCall()
-                if (call == null) {
-                    stats.unresolved++
-                    return
-                }
-                for (simpleCall in call.calls) {
-                    handleSymbol(
-                        symbol = simpleCall.signature.symbol,
-                        element = candidate.element,
-                        kind = EdgeKind.OPERATOR_OR_SYNTHETIC_CALL,
-                        index = index,
-                        stats = stats,
-                    )
+                handleCalls(candidate.element.resolveSuccessfulCall(), candidate.element, index, stats) {
+                    EdgeKind.OPERATOR_OR_SYNTHETIC_CALL
                 }
             }
 
@@ -479,21 +439,10 @@ class Analyzer {
                 }
             }
 
-            is JavaTypeCandidate -> {
+            is JavaTypeRefCandidate -> {
                 when (val resolved = candidate.element.resolve()) {
                     is PsiClass -> handleJavaResolved(
-                        resolved, candidate.element, EdgeKind.TYPE_REFERENCE, index, stats,
-                    )
-
-                    null -> stats.unresolved++
-                    else -> stats.skipped++
-                }
-            }
-
-            is JavaInheritanceCandidate -> {
-                when (val resolved = candidate.element.resolve()) {
-                    is PsiClass -> handleJavaResolved(
-                        resolved, candidate.element, EdgeKind.INHERITANCE, index, stats,
+                        resolved, candidate.element, candidate.kind, index, stats,
                     )
 
                     null -> stats.unresolved++
@@ -583,7 +532,28 @@ class Analyzer {
         }
     }
 
-    context(session: KaSession)
+    private fun handleCalls(
+        call: KaSimpleOrMultiCall?,
+        element: PsiElement,
+        index: DeclarationIndex,
+        stats: MutableResolutionStats,
+        kindFor: (KaSymbol) -> EdgeKind?,
+    ) {
+        if (call == null) {
+            stats.unresolved++
+            return
+        }
+        for (simpleCall in call.calls) {
+            val symbol = simpleCall.signature.symbol
+            val kind = kindFor(symbol)
+            if (kind == null) {
+                stats.skipped++
+            } else {
+                handleSymbol(symbol, element, kind, index, stats)
+            }
+        }
+    }
+
     private fun handleJavaResolved(
         psiClass: PsiClass?,
         element: PsiElement,
@@ -601,27 +571,12 @@ class Analyzer {
             stats.resolvedExternal++
             return
         }
-        val from = index.nodeForElement(element)
-        if (from == null) {
-            stats.skipped++
-            return
-        }
-        stats.resolvedSource++
-        if (from.id == to.id) {
-            stats.selfEdgesSkipped++
-            return
-        }
-        val callSite = index.callSite(element)
-        if (callSite == null) {
-            stats.skipped++
-            return
-        }
-        index.addEdge(from, to, kind, callSite)
+        recordSourceEdge(to, element, kind, index, stats)
     }
 
     private fun handleSymbol(
         symbol: KaSymbol?,
-        element: com.intellij.psi.PsiElement,
+        element: PsiElement,
         kind: EdgeKind,
         index: DeclarationIndex,
         stats: MutableResolutionStats,
@@ -670,6 +625,16 @@ class Analyzer {
             stats.skipped++
             return
         }
+        recordSourceEdge(to, element, kind, index, stats)
+    }
+
+    private fun recordSourceEdge(
+        to: GraphNode,
+        element: PsiElement,
+        kind: EdgeKind,
+        index: DeclarationIndex,
+        stats: MutableResolutionStats,
+    ) {
         val from = index.nodeForElement(element)
         if (from == null) {
             stats.skipped++

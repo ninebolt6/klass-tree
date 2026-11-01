@@ -6,11 +6,13 @@ import com.intellij.psi.PsiJavaCodeReferenceElement
 import com.intellij.psi.PsiLambdaExpression
 import com.intellij.psi.PsiMethodReferenceExpression
 import com.intellij.psi.PsiReferenceExpression
+import io.github.klasstree.graph.EdgeKind
 import org.jetbrains.kotlin.psi.KtAnnotationEntry
 import org.jetbrains.kotlin.psi.KtArrayAccessExpression
 import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtCallableReferenceExpression
 import org.jetbrains.kotlin.psi.KtDestructuringDeclarationEntry
+import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtForExpression
 import org.jetbrains.kotlin.psi.KtImportDirective
 import org.jetbrains.kotlin.psi.KtLabelReferenceExpression
@@ -18,21 +20,41 @@ import org.jetbrains.kotlin.psi.KtNameReferenceExpression
 import org.jetbrains.kotlin.psi.KtOperationReferenceExpression
 import org.jetbrains.kotlin.psi.KtPropertyDelegate
 import org.jetbrains.kotlin.psi.KtQualifiedExpression
+import org.jetbrains.kotlin.psi.KtReferenceExpression
 import org.jetbrains.kotlin.psi.KtSuperTypeListEntry
 import org.jetbrains.kotlin.psi.KtTreeVisitorVoid
 import org.jetbrains.kotlin.psi.KtTypeReference
 import org.jetbrains.kotlin.psi.KtUserType
 import org.jetbrains.kotlin.psi.KtValueArgument
 import org.jetbrains.kotlin.psi.psiUtil.getStrictParentOfType
+import org.jetbrains.kotlin.resolution.KtResolvable
 import org.jetbrains.kotlin.resolution.KtResolvableCall
 
 internal sealed interface ReferenceCandidate {
     val element: PsiElement
 }
 
-internal data class TypeReferenceCandidate(override val element: KtUserType) : ReferenceCandidate
-internal data class InheritanceCandidate(override val element: KtSuperTypeListEntry) : ReferenceCandidate
+/**
+ * Kotlin candidates that resolve through the generic `KtResolvable` overload of
+ * `resolveSuccessfulSymbol` with a fixed edge kind.
+ */
+internal sealed interface KotlinSymbolCandidate : ReferenceCandidate {
+    override val element: KtResolvable
+    val kind: EdgeKind
+}
+
+internal data class TypeReferenceCandidate(override val element: KtUserType) : KotlinSymbolCandidate {
+    override val kind: EdgeKind get() = EdgeKind.TYPE_REFERENCE
+}
+
+internal data class InheritanceCandidate(override val element: KtSuperTypeListEntry) : KotlinSymbolCandidate {
+    override val kind: EdgeKind get() = EdgeKind.INHERITANCE
+}
+
 internal data class CallCandidate(override val element: KtCallExpression) : ReferenceCandidate
+
+// Not a KotlinSymbolCandidate: it must resolve through the KtAnnotationEntry overload of
+// resolveSuccessfulSymbol, which returns the constructor symbol rather than the class symbol.
 internal data class AnnotationCandidate(override val element: KtAnnotationEntry) : ReferenceCandidate
 internal data class PropertyCandidate(override val element: PsiElement) : ReferenceCandidate
 internal data class CallableReferenceCandidate(override val element: KtCallableReferenceExpression) : ReferenceCandidate
@@ -40,8 +62,21 @@ internal data class OperatorCandidate(override val element: KtResolvableCall) : 
 
 // Java candidates; the PSI type drives which resolve() entry point applies.
 internal data class JavaCallCandidate(override val element: PsiElement) : ReferenceCandidate
-internal data class JavaTypeCandidate(override val element: PsiJavaCodeReferenceElement) : ReferenceCandidate
-internal data class JavaInheritanceCandidate(override val element: PsiJavaCodeReferenceElement) : ReferenceCandidate
+
+/** Java code references resolved to a class with a fixed edge kind. */
+internal sealed interface JavaTypeRefCandidate : ReferenceCandidate {
+    override val element: PsiJavaCodeReferenceElement
+    val kind: EdgeKind
+}
+
+internal data class JavaTypeCandidate(override val element: PsiJavaCodeReferenceElement) : JavaTypeRefCandidate {
+    override val kind: EdgeKind get() = EdgeKind.TYPE_REFERENCE
+}
+
+internal data class JavaInheritanceCandidate(override val element: PsiJavaCodeReferenceElement) : JavaTypeRefCandidate {
+    override val kind: EdgeKind get() = EdgeKind.INHERITANCE
+}
+
 internal data class JavaAnnotationCandidate(override val element: PsiAnnotation) : ReferenceCandidate
 internal data class JavaPropertyCandidate(override val element: PsiReferenceExpression) : ReferenceCandidate
 internal data class JavaMethodRefCandidate(override val element: PsiMethodReferenceExpression) : ReferenceCandidate
@@ -53,7 +88,7 @@ internal data class JavaLambdaCandidate(override val element: PsiLambdaExpressio
  * block per file.
  */
 internal object ReferenceCollector {
-    fun collect(file: org.jetbrains.kotlin.psi.KtFile): List<ReferenceCandidate> {
+    fun collect(file: KtFile): List<ReferenceCandidate> {
         val result = mutableListOf<ReferenceCandidate>()
         file.accept(object : KtTreeVisitorVoid() {
             override fun visitUserType(type: KtUserType) {
@@ -113,7 +148,7 @@ internal object ReferenceCollector {
                 super.visitDestructuringDeclarationEntry(entry)
             }
 
-            override fun visitReferenceExpression(expression: org.jetbrains.kotlin.psi.KtReferenceExpression) {
+            override fun visitReferenceExpression(expression: KtReferenceExpression) {
                 when (expression) {
                     is KtOperationReferenceExpression ->
                         if (expression.text !in NON_CALLABLE_OPERATORS) {

@@ -19,7 +19,6 @@ import org.jetbrains.kotlin.psi.KtClass
 import org.jetbrains.kotlin.psi.KtClassOrObject
 import org.jetbrains.kotlin.psi.KtEnumEntry
 import org.jetbrains.kotlin.psi.KtFile
-import org.jetbrains.kotlin.psi.KtNamedDeclaration
 import org.jetbrains.kotlin.psi.KtNamedFunction
 import org.jetbrains.kotlin.psi.KtObjectDeclaration
 import org.jetbrains.kotlin.psi.KtProperty
@@ -53,7 +52,7 @@ internal class DeclarationIndex(
 
     private fun indexKotlinFile(file: KtFile, info: SourceFileInfo) {
         val hasTopLevelCallable =
-            file.declarations.any { it is KtNamedDeclaration && (it is KtProperty || it is KtNamedFunction) }
+            file.declarations.any { it is KtProperty || it is KtNamedFunction }
         if (hasTopLevelCallable) {
             fileScopeNode(info)
         }
@@ -77,23 +76,10 @@ internal class DeclarationIndex(
             psiClass.isInterface -> NodeKind.INTERFACE
             else -> NodeKind.CLASS
         }
-        val packageName = (info.file as? PsiJavaFile)?.packageName?.ifEmpty { null }
         val fqName = psiClass.qualifiedName ?: psiClass.name ?: "<anonymous>"
         val name = psiClass.name ?: "<anonymous>"
         val offset = psiClass.nameIdentifier?.textOffset ?: psiClass.textOffset
-        val (line, column) = lineAndColumn(info.file, offset)
-        val node = GraphNode(
-            id = "${info.module.id}:${info.relativePath}#${kind.name}:$fqName",
-            kind = kind,
-            name = name,
-            fqName = fqName,
-            module = info.module.moduleLabel,
-            sourceSet = info.module.sourceSetName,
-            packageName = packageName,
-            sourceFile = info.relativePath,
-            line = line,
-            column = column,
-        )
+        val node = newNode(info, kind, name, fqName, offset)
         classNodes[psiClass] = node
         classNodesByFqName.putIfAbsent(fqName, node)
         builder.addNode(node)
@@ -120,18 +106,9 @@ internal class DeclarationIndex(
 
     fun nodeForSymbol(symbol: KaSymbol): GraphNode? {
         val psi = symbol.psi ?: symbol.realPsi ?: symbol.anchorPsi
-        if (psi != null) {
-            if (psi is KtClassOrObject) {
-                classNodes[psi]?.let { return it }
-            }
-            if (psi is KtTypeAlias) {
-                typeAliasNodes[psi]?.let { return it }
-            }
-            if (psi is PsiClass) {
-                classNodes[psi]?.let { return it }
-            }
-            nodeForElement(psi)?.let { return it }
-        }
+        // nodeForElement walks the PSI parents, covering declared classes and aliases as well as
+        // member symbols belonging to an indexed declaration.
+        if (psi != null) nodeForElement(psi)?.let { return it }
 
         // Constructors (including implicit primary constructors and annotation constructors)
         // do not always expose their owning class through `psi`. Fall back to the class id so
@@ -173,19 +150,7 @@ internal class DeclarationIndex(
         val fqName = declaration.fqName?.asString()
         val name = declaration.name ?: "<anonymous>"
         val offset = declaration.nameIdentifier?.textOffset ?: declaration.textOffset
-        val (line, column) = lineAndColumn(info.file, offset)
-        val node = GraphNode(
-            id = "${info.module.id}:${info.relativePath}#${NodeKind.TYPE_ALIAS.name}:${fqName ?: name}",
-            kind = NodeKind.TYPE_ALIAS,
-            name = name,
-            fqName = fqName,
-            module = info.module.moduleLabel,
-            sourceSet = info.module.sourceSetName,
-            packageName = info.packageName().ifEmpty { null },
-            sourceFile = info.relativePath,
-            line = line,
-            column = column,
-        )
+        val node = newNode(info, NodeKind.TYPE_ALIAS, name, fqName, offset)
         typeAliasNodes[declaration] = node
         builder.addNode(node)
     }
@@ -201,6 +166,16 @@ internal class DeclarationIndex(
         val fqName = declaration.fqName?.asString()
         val name = declaration.name ?: "<anonymous>"
         val offset = declaration.nameIdentifier?.textOffset ?: declaration.textOffset
+        return newNode(info, kind, name, fqName, offset)
+    }
+
+    private fun newNode(
+        info: SourceFileInfo,
+        kind: NodeKind,
+        name: String,
+        fqName: String?,
+        offset: Int,
+    ): GraphNode {
         val (line, column) = lineAndColumn(info.file, offset)
         return GraphNode(
             id = "${info.module.id}:${info.relativePath}#${kind.name}:${fqName ?: name}",

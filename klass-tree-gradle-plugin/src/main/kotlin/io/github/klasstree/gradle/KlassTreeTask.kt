@@ -103,16 +103,16 @@ abstract class KlassTreeTask : DefaultTask() {
         val specFile = File(output, "analysis-spec.json")
         specFile.writeText(KlassTreeJson.encodeToString(AnalysisSpec.serializer(), spec))
 
-        val result = execOperations.javaexec { spec ->
-            spec.classpath = analysisClasspath + analyzerClasspath
-            spec.mainClass.set("io.github.klasstree.analyzer.AnalyzerMainKt")
-            spec.args(
+        val result = execOperations.javaexec { javaexec ->
+            javaexec.classpath = analysisClasspath + analyzerClasspath
+            javaexec.mainClass.set("io.github.klasstree.analyzer.AnalyzerMainKt")
+            javaexec.args(
                 specFile.absolutePath,
                 output.absolutePath,
                 formats.get().sorted().joinToString(","),
             )
-            analyzerJvmArgs.get().forEach(spec::jvmArgs)
-            spec.isIgnoreExitValue = true
+            analyzerJvmArgs.get().forEach(javaexec::jvmArgs)
+            javaexec.isIgnoreExitValue = true
         }
 
         if (result.exitValue != 0) {

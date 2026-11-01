@@ -1,10 +1,12 @@
 package io.github.klasstree.gradle
 
 import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.ProjectLayout
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.SetProperty
+import javax.inject.Inject
 
 /**
  * Configuration for the `klassTree` task.
@@ -12,7 +14,7 @@ import org.gradle.api.provider.SetProperty
  * The extension is registered on the root project. It intentionally exposes only Gradle types so
  * that the plugin can be configured from either the Kotlin or Groovy DSL.
  */
-abstract class KlassTreeExtension {
+abstract class KlassTreeExtension @Inject constructor(layout: ProjectLayout) {
     /** Analyze test source sets in addition to `main`. */
     abstract val includeTests: Property<Boolean>
 
@@ -51,6 +53,8 @@ abstract class KlassTreeExtension {
         includeTests.convention(false)
         includeJavaSources.convention(true)
         formats.convention(setOf("json", "dot"))
+        outputDirectory.convention(layout.buildDirectory.dir("klass-tree"))
+        baselineFile.convention(layout.projectDirectory.file("klass-tree-baseline.json"))
         analysisApiVersion.convention(DEFAULT_ANALYSIS_API_VERSION)
         failOnAnalysisError.convention(false)
         analyzerJvmArgs.convention(emptyList())

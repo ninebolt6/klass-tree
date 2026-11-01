@@ -4,7 +4,6 @@ import kotlinx.serialization.Serializable
 import org.gradle.api.Project
 import org.gradle.api.artifacts.ProjectDependency
 import org.gradle.api.artifacts.component.ProjectComponentIdentifier
-import org.gradle.api.attributes.Usage
 import org.gradle.api.tasks.TaskProvider
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmExtension
@@ -43,12 +42,6 @@ internal object KotlinProjectScanner {
             return KotlinProjectScan(emptyList(), emptyList())
         }
 
-        val moduleElements = project.configurations.consumable("klassTreeModuleElements") { configuration ->
-            configuration.attributes.attribute(
-                Usage.USAGE_ATTRIBUTE,
-                project.objects.named(Usage::class.java, MODULE_SPEC_USAGE),
-            )
-        }
         val kotlin = project.extensions.findByType(KotlinJvmExtension::class.java)
             ?: return KotlinProjectScan(emptyList(), emptyList())
         val sourceDirectories = LinkedHashSet<File>()
@@ -91,9 +84,6 @@ internal object KotlinProjectScanner {
                     project.layout.buildDirectory.file("klass-tree/modules/${sourceSet.name}.json"),
                 )
             }
-            moduleElements.configure { configuration ->
-                configuration.outgoing.artifact(moduleTask.flatMap { it.outputFile })
-            }
             moduleTasks += moduleTask
         }
         return KotlinProjectScan(sourceDirectories.toList(), moduleTasks)
@@ -116,9 +106,6 @@ internal object KotlinProjectScanner {
         return directories.toList()
     }
 
-    private fun moduleId(projectPath: String, sourceSetName: String): String =
-        (if (projectPath == ":") ":" else "$projectPath:") + sourceSetName
-
     private fun moduleName(projectPath: String, sourceSetName: String): String {
         val projectPart = projectPath.removePrefix(":").ifEmpty { "root" }
         return sanitize(projectPart) + "_" + sanitize(sourceSetName)
@@ -126,6 +113,4 @@ internal object KotlinProjectScanner {
 
     private fun sanitize(value: String): String =
         value.replace(Regex("[^A-Za-z0-9_]"), "_").ifEmpty { "root" }
-
-    private const val MODULE_SPEC_USAGE = "klass-tree-module-spec"
 }

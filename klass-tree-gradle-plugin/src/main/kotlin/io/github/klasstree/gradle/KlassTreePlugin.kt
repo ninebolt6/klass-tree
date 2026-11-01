@@ -26,8 +26,6 @@ class KlassTreePlugin : Plugin<Project> {
         }
 
         val extension = project.extensions.create("klassTree", KlassTreeExtension::class.java)
-        extension.outputDirectory.convention(project.layout.buildDirectory.dir("klass-tree"))
-        extension.baselineFile.convention(project.layout.projectDirectory.file("klass-tree-baseline.json"))
 
         val analyzerConfiguration = project.configurations.create("klassTreeAnalyzer") { configuration ->
             configuration.isCanBeConsumed = false
@@ -61,15 +59,6 @@ class KlassTreePlugin : Plugin<Project> {
             }
         }
 
-        val moduleDependencyScope = project.configurations.dependencyScope("klassTreeModules")
-        val moduleSpecConfiguration = project.configurations.resolvable("klassTreeModuleSpecs") { configuration ->
-            configuration.extendsFrom(moduleDependencyScope)
-            configuration.attributes.attribute(
-                Usage.USAGE_ATTRIBUTE,
-                project.objects.named(Usage::class.java, "klass-tree-module-spec"),
-            )
-        }
-
         val task = project.tasks.register("klassTree", KlassTreeTask::class.java) { task ->
             task.group = "documentation"
             task.description = "Writes a source-level Kotlin dependency graph (JSON and DOT)."
@@ -78,7 +67,6 @@ class KlassTreePlugin : Plugin<Project> {
             task.analyzerJvmArgs.set(extension.analyzerJvmArgs)
             task.analysisClasspath.from(analyzerConfiguration)
             task.analyzerClasspath.from(PluginClasspath.resolve())
-            task.moduleSpecFiles.from(moduleSpecConfiguration)
             task.projectRoot.set(project.rootProject.projectDir.absolutePath)
             task.failOnAnalysisError.set(extension.failOnAnalysisError)
             task.includeTests.set(extension.includeTests)
@@ -158,18 +146,15 @@ class KlassTreePlugin : Plugin<Project> {
                 )
             }
 
-            kotlinProjects.forEach { kotlinProject ->
-                project.dependencies.add(
-                    moduleDependencyScope.name,
-                    project.dependencies.project(mapOf("path" to kotlinProject.path)),
-                )
-            }
-
             val sourceDirectories = projectScans.values.flatMap { it.sourceDirectories }
+            // Wiring module-spec task outputs through their providers also carries the task
+            // dependencies, so klassTree runs every producer task first.
+            val moduleSpecOutputs = projectScans.values
+                .flatMap { it.moduleTasks }
+                .map { moduleTask -> moduleTask.flatMap(KlassTreeModuleSpecTask::outputFile) }
             task.configure { klassTreeTask ->
+                klassTreeTask.moduleSpecFiles.from(moduleSpecOutputs)
                 klassTreeTask.sourceFiles.from(sourceDirectories)
-            }
-            task.configure { klassTreeTask ->
                 klassTreeTask.formats.set(formats)
             }
         }
