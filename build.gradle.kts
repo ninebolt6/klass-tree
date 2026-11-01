@@ -4,7 +4,7 @@ plugins {
 }
 
 allprojects {
-    group = "io.github.klass-tree"
+    group = "io.github.ninebolt6.klass-tree"
     version = "0.1.0-SNAPSHOT"
 }
 

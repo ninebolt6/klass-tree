@@ -24,8 +24,8 @@ dependencies {
 gradlePlugin {
     plugins {
         create("klassTree") {
-            id = "io.github.klass-tree"
-            implementationClass = "io.github.klasstree.gradle.KlassTreePlugin"
+            id = "io.github.ninebolt6.klass-tree"
+            implementationClass = "io.github.ninebolt6.klasstree.gradle.KlassTreePlugin"
             displayName = "klass-tree"
             description = "Outputs a source-level Kotlin dependency graph for a multi-module Gradle build."
         }

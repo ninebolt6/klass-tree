@@ -1,6 +1,6 @@
 plugins {
     kotlin("jvm") version "2.5.0-Beta2" apply false
-    id("io.github.klass-tree")
+    id("io.github.ninebolt6.klass-tree")
 }
 
 klassTree {
