@@ -394,6 +394,50 @@ class KlassTreeFunctionalTest {
     }
 
     @Test
+    fun `klassTree removes a stale graph dot when the dot format is disabled`() {
+        writeProject()
+        runner("klassTree").build()
+        val dotFile = projectDir.resolve("build/klass-tree/graph.dot").toFile()
+        assertTrue(dotFile.isFile)
+
+        writeProject(klassTreeConfig = """formats.set(listOf("json"))""")
+        runner("klassTree").build()
+
+        assertFalse(dotFile.isFile)
+    }
+
+    @Test
+    fun `klassTreeCheck reports the unreadable baseline file`() {
+        writeProject()
+        projectDir.resolve("klass-tree-baseline.json").toFile().writeText("{ not json")
+
+        val result = runner("klassTreeCheck").buildAndFail()
+
+        assertTrue(result.output.contains("klass-tree: cannot parse"))
+        assertTrue(result.output.contains("klass-tree-baseline.json"))
+    }
+
+    @Test
+    fun `klassTreeCheck ignores references that only share a name prefix with denied targets`() {
+        writeProject(klassTreeConfig = """deniedTargets.set(listOf("shared.Shar"))""")
+        runner("klassTreeBaseline").build()
+        write(
+            "api/src/main/kotlin/api/New.kt",
+            """
+                package api
+
+                import shared.Shared
+
+                fun make(): Shared = Shared()
+            """,
+        )
+
+        val result = runner("klassTreeCheck").build()
+
+        assertTrue(result.task(":klassTreeCheck")?.outcome == TaskOutcome.SUCCESS)
+    }
+
+    @Test
     fun `klassTreeCheck passes against a baseline written by klassTreeBaseline`() {
         writeProject(klassTreeConfig = """deniedTargets.set(listOf("shared"))""")
 

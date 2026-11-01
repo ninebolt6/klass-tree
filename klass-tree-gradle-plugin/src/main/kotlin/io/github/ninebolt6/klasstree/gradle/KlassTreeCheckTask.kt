@@ -53,8 +53,8 @@ abstract class KlassTreeCheckTask : DefaultTask() {
                     "klassTreeBaseline` and commit the result, or set klassTree.baselineFile.",
             )
         }
-        val baseline = decode(baselinePath.readText())
-        val current = decode(graphJson.get().asFile.readText())
+        val baseline = decode(baselinePath.readText(), baselinePath)
+        val current = decode(graphJson.get().asFile.readText(), graphJson.get().asFile)
         val diff = GraphDiffer.diff(baseline, current)
         writeDiff(diff)
 
@@ -94,8 +94,12 @@ abstract class KlassTreeCheckTask : DefaultTask() {
         }
     }
 
-    private fun decode(content: String): DependencyGraph =
-        KlassTreeJson.decodeFromString(DependencyGraph.serializer(), content)
+    private fun decode(content: String, file: java.io.File): DependencyGraph =
+        try {
+            KlassTreeJson.decodeFromString(DependencyGraph.serializer(), content)
+        } catch (exception: Exception) {
+            throw GradleException("klass-tree: cannot parse $file: ${exception.message}", exception)
+        }
 
     private fun writeDiff(diff: GraphDiff) {
         val file = diffFile.get().asFile
@@ -108,8 +112,13 @@ abstract class KlassTreeCheckTask : DefaultTask() {
 
     private fun GraphNode?.matchesAny(targets: List<String>): Boolean =
         this != null && targets.any { prefix ->
-            fqName?.startsWith(prefix) == true || packageName?.startsWith(prefix) == true
+            fqName.matchesTarget(prefix) || packageName.matchesTarget(prefix)
         }
+
+    // A target covers the declaration itself plus members and nested packages, but must not
+    // match names that merely share a prefix (e.g. `User` must not deny `UserIndex`).
+    private fun String?.matchesTarget(prefix: String): Boolean =
+        this == prefix || this?.startsWith("$prefix.") == true
 
     private fun describe(edge: GraphEdge, nodesById: Map<String, GraphNode>): String {
         val sites = edge.callSites.joinToString(", ") { "${it.file}:${it.line}" }

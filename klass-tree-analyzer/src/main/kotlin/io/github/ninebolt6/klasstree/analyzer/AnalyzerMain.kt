@@ -46,6 +46,9 @@ fun main(args: Array<String>) {
         if ("dot" in formats) {
             val jsonGraph = KlassTreeJson.decodeFromString<DependencyGraph>(Files.readString(jsonFile))
             DotExporter.write(jsonGraph, outputDirectory.resolve("graph.dot"))
+        } else {
+            // A graph.dot produced by an earlier run must not linger and misrepresent the graph.
+            Files.deleteIfExists(outputDirectory.resolve("graph.dot"))
         }
 
         println(
