@@ -215,6 +215,32 @@ class KlassTreeFunctionalTest {
         assertTrue(classpath.any { it.contains("graph-dot") })
     }
 
+    @Test
+    fun `klassTree includes java sources in the graph`() {
+        writeProject()
+        write(
+            "shared/src/main/java/shared/JavaHelper.java",
+            """
+                package shared;
+
+                public class JavaHelper {
+                    public static Shared make() { return new Shared(); }
+                }
+            """,
+        )
+
+        runner("klassTree").build()
+
+        val graph = Json.parseToJsonElement(
+            projectDir.resolve("build/klass-tree/graph.json").toFile().readText(),
+        ).jsonObject
+        val nodes = graph.getValue("nodes").jsonArray.map { it.jsonObject }
+        assertTrue(
+            nodes.any { it.getValue("fqName").jsonPrimitive.content == "shared.JavaHelper" },
+            "expected shared.JavaHelper node, got " + nodes.map { it["fqName"] },
+        )
+    }
+
     private fun writeProject(
         includeTests: Boolean = false,
         invalidDependency: Boolean = false,

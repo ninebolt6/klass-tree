@@ -535,6 +535,65 @@ class AnalyzerTest {
         assertTrue(graph.nodes.all { it.sourceFile == "src/app/main/Real.kt" })
     }
 
+    @Test
+    fun `java sources produce nodes and edges in both directions`() {
+        val graph = analyze(
+            module(
+                ":app:main",
+                "Helper.java" to """
+                    package com.example;
+
+                    public interface Helper {
+                        void help();
+                    }
+                """,
+                "RealHelper.java" to """
+                    package com.example;
+
+                    public class RealHelper implements Helper {
+                        @Override
+                        public void help() {
+                            UserKt.topLevel();
+                        }
+                    }
+                """,
+                "User.kt" to """
+                    package com.example
+
+                    fun topLevel() {}
+
+                    class User(private val helper: RealHelper) {
+                        fun go() {
+                            RealHelper().help()
+                            helper.help()
+                        }
+                    }
+                """,
+            ),
+        )
+
+        val names = graph.nodes.filter { it.kind != NodeKind.FILE_SCOPE }.map { it.fqName to it.kind }.toSet()
+        assertTrue(names.contains("com.example.Helper" to NodeKind.INTERFACE))
+        assertTrue(names.contains("com.example.RealHelper" to NodeKind.CLASS))
+        assertNotNull(graph.nodes.singleOrNull { it.kind == NodeKind.FILE_SCOPE })
+
+        assertNotNull(edge(graph, "com.example.RealHelper", "com.example.Helper", EdgeKind.INHERITANCE))
+        assertNotNull(edge(graph, "com.example.RealHelper", "com.example", EdgeKind.FUNCTION_CALL))
+        assertNotNull(edge(graph, "com.example.User", "com.example.RealHelper", EdgeKind.TYPE_REFERENCE))
+        assertNotNull(edge(graph, "com.example.User", "com.example.RealHelper", EdgeKind.CONSTRUCTOR_CALL))
+        assertNotNull(edge(graph, "com.example.User", "com.example.RealHelper", EdgeKind.FUNCTION_CALL))
+        assertEquals(0, graph.stats.resolution.unresolved)
+    }
+
+    @Test
+    fun `java sources are skipped when includeJavaSources is false`() {
+        val graph = analyze(
+            module(":app:main", "J.java" to "package com.example; class J {}"),
+            includeJavaSources = false,
+        )
+        assertTrue(graph.nodes.none { it.fqName == "com.example.J" })
+    }
+
     private fun module(
         id: String,
         vararg sources: Pair<String, String>,
@@ -549,11 +608,15 @@ class AnalyzerTest {
         val dependencies: List<String>,
     )
 
-    private fun analyze(vararg modules: TestModule): DependencyGraph {
+    private fun analyze(
+        vararg modules: TestModule,
+        includeJavaSources: Boolean = true,
+    ): DependencyGraph {
         val root = Files.createTempDirectory("klass-tree-analyzer-test")
         try {
             val spec = AnalysisSpec(
                 projectRoot = root.toString(),
+                includeJavaSources = includeJavaSources,
                 modules = modules.map { module ->
                     val sourceSetName = module.id.substringAfterLast(":")
                     val projectPath = module.id.substringBeforeLast(":").ifEmpty { ":" }

@@ -46,6 +46,9 @@ abstract class KlassTreeTask : DefaultTask() {
     abstract val includeTests: Property<Boolean>
 
     @get:Input
+    abstract val includeJavaSources: Property<Boolean>
+
+    @get:Input
     abstract val formats: SetProperty<String>
 
     @get:Input
@@ -93,6 +96,7 @@ abstract class KlassTreeTask : DefaultTask() {
             projectRoot = projectRoot.get(),
             modules = modules,
             failOnAnalysisError = failOnAnalysisError.get(),
+            includeJavaSources = includeJavaSources.get(),
         )
         val output = outputDirectory.get().asFile
         output.mkdirs()

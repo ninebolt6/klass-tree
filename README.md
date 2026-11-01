@@ -60,6 +60,10 @@ klassTree {
     // Analyze test source sets in addition to main. Default: false.
     includeTests.set(false)
 
+    // Analyze .java files alongside Kotlin sources. Default: true. Disable only to fall back to
+    // Kotlin-only analysis; mixed codebases silently lose Java-originated edges when off.
+    includeJavaSources.set(true)
+
     // Non-empty subset of "json" and "dot". JSON is always written because DOT is rendered from
     // it. Default: ["json", "dot"].
     formats.set(setOf("json", "dot"))
@@ -114,9 +118,13 @@ module: declare the code being phased out as a denied target and let CI enforce 
 
 - Every project that applies `org.jetbrains.kotlin.jvm`; `main` by default, all compilation
   source sets when `includeTests` is on.
-- Kotlin sources only; script files are skipped.
+- Kotlin and Java sources from the same source sets; script files are skipped. Java sources come
+  from the matching Java `SourceSet` (`src/<name>/java`) and can be excluded with
+  `includeJavaSources`.
 - Types, calls, property accesses, annotations, and operator/synthetic calls are resolved
-  semantically. Imports do not create edges.
+  semantically. Imports and package statements do not create edges.
+- Java-to-Kotlin references resolve through the Kotlin light classes, so a Java call to a Kotlin
+  top-level function lands on the file's `FILE_SCOPE` node.
 
 ## Node rules
 
@@ -257,7 +265,10 @@ Outputs go to `example/build/klass-tree/`.
 
 ## Limitations
 
-- Kotlin JVM only; Java sources are skipped.
+- Kotlin JVM only (Kotlin Multiplatform, Android, and other platforms are not supported). Java
+  sources in the analyzed source sets are included unless `includeJavaSources` is off; Java
+  language constructs without a Kotlin edge-kind equivalent (e.g. static-initializer reads) map
+  to the closest kind.
 - Project dependencies map to the target project's `main` module. Dependencies on projects from
   included builds are not on the analysis classpath because project components are filtered out.
 - Analysis is not incremental within a run: the task re-analyzes all selected modules.

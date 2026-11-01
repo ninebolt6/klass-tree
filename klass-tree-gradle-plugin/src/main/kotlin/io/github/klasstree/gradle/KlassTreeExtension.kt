@@ -16,6 +16,9 @@ abstract class KlassTreeExtension {
     /** Analyze test source sets in addition to `main`. */
     abstract val includeTests: Property<Boolean>
 
+    /** Analyze `.java` sources alongside `.kt`. Disable to skip Java entirely. */
+    abstract val includeJavaSources: Property<Boolean>
+
     /** Output formats. `json` is always written; `dot` is derived from the JSON output. */
     abstract val formats: SetProperty<String>
 
@@ -46,6 +49,7 @@ abstract class KlassTreeExtension {
 
     init {
         includeTests.convention(false)
+        includeJavaSources.convention(true)
         formats.convention(setOf("json", "dot"))
         analysisApiVersion.convention(DEFAULT_ANALYSIS_API_VERSION)
         failOnAnalysisError.convention(false)

@@ -82,6 +82,7 @@ class KlassTreePlugin : Plugin<Project> {
             task.projectRoot.set(project.rootProject.projectDir.absolutePath)
             task.failOnAnalysisError.set(extension.failOnAnalysisError)
             task.includeTests.set(extension.includeTests)
+            task.includeJavaSources.set(extension.includeJavaSources)
         }
 
         project.tasks.register("klassTreeCheck", KlassTreeCheckTask::class.java) { checkTask ->
@@ -102,7 +103,11 @@ class KlassTreePlugin : Plugin<Project> {
             if (!projectToScan.plugins.hasPlugin("org.jetbrains.kotlin.jvm")) return
             try {
                 projectScans[projectToScan.path] =
-                    KotlinProjectScanner.configureProject(projectToScan, extension.includeTests.get())
+                    KotlinProjectScanner.configureProject(
+                        projectToScan,
+                        extension.includeTests.get(),
+                        extension.includeJavaSources.get(),
+                    )
             } catch (error: LinkageError) {
                 scannerError = error
             }

@@ -38,7 +38,7 @@ internal data class KotlinProjectScan(
  */
 @OptIn(ExperimentalKotlinGradlePluginApi::class)
 internal object KotlinProjectScanner {
-    fun configureProject(project: Project, includeTests: Boolean): KotlinProjectScan {
+    fun configureProject(project: Project, includeTests: Boolean, includeJavaSources: Boolean): KotlinProjectScan {
         if (!project.plugins.hasPlugin("org.jetbrains.kotlin.jvm")) {
             return KotlinProjectScan(emptyList(), emptyList())
         }
@@ -61,7 +61,7 @@ internal object KotlinProjectScanner {
             if (!includeTests && sourceSet.name != "main") return@forEach
             if (!seenSourceSets.add(sourceSet.name)) return@forEach
 
-            val directories = sourceDirectories(sourceSet)
+            val directories = sourceDirectories(project, sourceSet, includeJavaSources)
             sourceDirectories += directories
             val dependencyConfiguration = project.configurations.named(
                 compilation.compileDependencyConfigurationName,
@@ -99,10 +99,20 @@ internal object KotlinProjectScanner {
         return KotlinProjectScan(sourceDirectories.toList(), moduleTasks)
     }
 
-    private fun sourceDirectories(sourceSet: org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet): List<File> {
+    private fun sourceDirectories(
+        project: Project,
+        sourceSet: org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet,
+        includeJavaSources: Boolean,
+    ): List<File> {
         val directories = LinkedHashSet<File>()
         directories += sourceSet.kotlin.srcDirs
         directories += sourceSet.generatedKotlin.srcDirs
+        if (includeJavaSources) {
+            // Kotlin compilations share their source set name with the matching Java SourceSet
+            // (main, test, ...), whose java.srcDirs carries src/<name>/java.
+            project.extensions.findByType(org.gradle.api.plugins.JavaPluginExtension::class.java)
+                ?.sourceSets?.findByName(sourceSet.name)?.java?.srcDirs?.let { directories += it }
+        }
         return directories.toList()
     }
 

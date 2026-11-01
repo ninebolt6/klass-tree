@@ -3,6 +3,13 @@ package io.github.klasstree.analyzer
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.util.Computable
 import com.intellij.openapi.util.Disposer
+import com.intellij.psi.PsiCallExpression
+import com.intellij.psi.PsiClass
+import com.intellij.psi.PsiClassType
+import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiField
+import com.intellij.psi.PsiJavaFile
+import com.intellij.psi.PsiMethod
 import io.github.klasstree.graph.AnalysisSpec
 import io.github.klasstree.graph.DependencyGraph
 import io.github.klasstree.graph.EdgeKind
@@ -21,6 +28,7 @@ import org.jetbrains.kotlin.analysis.api.standalone.buildStandaloneAnalysisAPISe
 import org.jetbrains.kotlin.analysis.api.standalone.disposeGlobalStandaloneApplicationServices
 import org.jetbrains.kotlin.analysis.api.symbols.KaClassLikeSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaConstructorSymbol
+import org.jetbrains.kotlin.analysis.api.symbols.KaJavaFieldSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaNamedFunctionSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaPackageSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaPropertySymbol
@@ -186,8 +194,15 @@ class Analyzer {
         for (moduleSpec in spec.modules) {
             val psiFiles = filesByModuleName[moduleSpec.moduleName] ?: continue
             for (psiFile in psiFiles) {
-                val file = psiFile as? KtFile ?: continue
-                if (file.isScript()) continue
+                val file = when {
+                    psiFile is KtFile -> {
+                        if (psiFile.isScript()) continue
+                        psiFile
+                    }
+
+                    psiFile is PsiJavaFile && spec.includeJavaSources -> psiFile
+                    else -> continue
+                }
                 val absolutePath = file.virtualFile?.path?.let { Path.of(it).toAbsolutePath().normalize() } ?: continue
                 // Overlapping (non-identical) source roots can still list the same file.
                 if (!claimed.add(absolutePath)) continue
@@ -208,7 +223,11 @@ class Analyzer {
         stats: MutableResolutionStats,
     ) {
         try {
-            val candidates = ReferenceCollector.collect(info.file)
+            val candidates = when (val file = info.file) {
+                is KtFile -> ReferenceCollector.collect(file)
+                is PsiJavaFile -> JavaReferenceCollector.collect(file)
+                else -> emptyList()
+            }
             if (candidates.isEmpty()) return
             analyze(info.file) {
                 for (candidate in candidates) {
@@ -325,6 +344,10 @@ class Analyzer {
                         symbol, candidate.element, EdgeKind.PROPERTY_ACCESS, index, stats,
                     )
 
+                    is KaJavaFieldSymbol -> handleSymbol(
+                        symbol, candidate.element, EdgeKind.PROPERTY_ACCESS, index, stats,
+                    )
+
                     // A function used as a call target is represented by the call resolution
                     // (FUNCTION_CALL / CONSTRUCTOR_CALL). `::foo` is handled separately.
                     is KaNamedFunctionSymbol -> stats.skipped++
@@ -370,7 +393,136 @@ class Analyzer {
                     )
                 }
             }
+
+            is JavaCallCandidate -> {
+                val call = candidate.element as? PsiCallExpression
+                val method = call?.resolveMethod()
+                if (method == null) {
+                    stats.unresolved++
+                    return
+                }
+                val kind =
+                    if (method.isConstructor) EdgeKind.CONSTRUCTOR_CALL else EdgeKind.FUNCTION_CALL
+                handleJavaResolved(method.containingClass, candidate.element, kind, index, stats)
+            }
+
+            is JavaTypeCandidate -> {
+                when (val resolved = candidate.element.resolve()) {
+                    is PsiClass -> handleJavaResolved(
+                        resolved, candidate.element, EdgeKind.TYPE_REFERENCE, index, stats,
+                    )
+
+                    null -> stats.unresolved++
+                    else -> stats.skipped++
+                }
+            }
+
+            is JavaInheritanceCandidate -> {
+                when (val resolved = candidate.element.resolve()) {
+                    is PsiClass -> handleJavaResolved(
+                        resolved, candidate.element, EdgeKind.INHERITANCE, index, stats,
+                    )
+
+                    null -> stats.unresolved++
+                    else -> stats.skipped++
+                }
+            }
+
+            is JavaAnnotationCandidate -> {
+                handleJavaResolved(
+                    candidate.element.resolveAnnotationType(),
+                    candidate.element,
+                    EdgeKind.ANNOTATION,
+                    index,
+                    stats,
+                )
+            }
+
+            is JavaPropertyCandidate -> {
+                when (val resolved = candidate.element.resolve()) {
+                    is PsiField -> handleJavaResolved(
+                        resolved.containingClass,
+                        candidate.element,
+                        EdgeKind.PROPERTY_ACCESS,
+                        index,
+                        stats,
+                    )
+
+                    is PsiClass -> handleJavaResolved(
+                        resolved,
+                        candidate.element,
+                        EdgeKind.TYPE_REFERENCE,
+                        index,
+                        stats,
+                    )
+
+                    else -> stats.skipped++
+                }
+            }
+
+            is JavaMethodRefCandidate -> {
+                val method = candidate.element.resolve() as? PsiMethod
+                if (method == null) {
+                    stats.unresolved++
+                    return
+                }
+                handleJavaResolved(
+                    method.containingClass,
+                    candidate.element,
+                    EdgeKind.CALLABLE_REFERENCE,
+                    index,
+                    stats,
+                )
+            }
+
+            is JavaLambdaCandidate -> {
+                val resolved =
+                    (candidate.element.functionalInterfaceType as? PsiClassType)?.resolve()
+                handleJavaResolved(
+                    resolved,
+                    candidate.element,
+                    EdgeKind.OPERATOR_OR_SYNTHETIC_CALL,
+                    index,
+                    stats,
+                )
+            }
         }
+    }
+
+    context(session: KaSession)
+    private fun handleJavaResolved(
+        psiClass: PsiClass?,
+        element: PsiElement,
+        kind: EdgeKind,
+        index: DeclarationIndex,
+        stats: MutableResolutionStats,
+    ) {
+        val fqName = psiClass?.qualifiedName
+        if (fqName == null) {
+            if (psiClass == null) stats.unresolved++ else stats.skipped++
+            return
+        }
+        val to = index.nodeForQualifiedName(fqName)
+        if (to == null) {
+            stats.resolvedExternal++
+            return
+        }
+        val from = index.nodeForElement(element)
+        if (from == null) {
+            stats.skipped++
+            return
+        }
+        stats.resolvedSource++
+        if (from.id == to.id) {
+            stats.selfEdgesSkipped++
+            return
+        }
+        val callSite = index.callSite(element)
+        if (callSite == null) {
+            stats.skipped++
+            return
+        }
+        index.addEdge(from, to, kind, callSite)
     }
 
     private fun handleSymbol(
@@ -394,7 +546,7 @@ class Analyzer {
         }
 
         when (symbol.origin) {
-            KaSymbolOrigin.SOURCE -> Unit
+            KaSymbolOrigin.SOURCE, KaSymbolOrigin.JAVA_SOURCE -> Unit
 
             // Implicit primary constructors and annotation constructors are generated members of
             // source classes. They are needed for CONSTRUCTOR_CALL / ANNOTATION edges. Other

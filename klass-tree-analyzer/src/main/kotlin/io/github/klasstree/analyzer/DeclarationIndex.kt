@@ -1,14 +1,18 @@
 package io.github.klasstree.analyzer
 
 import com.intellij.openapi.editor.Document
+import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiFile
+import com.intellij.psi.PsiJavaFile
 import io.github.klasstree.graph.CallSite
 import io.github.klasstree.graph.EdgeKind
 import io.github.klasstree.graph.GraphBuilder
 import io.github.klasstree.graph.GraphNode
 import io.github.klasstree.graph.ModuleSpec
 import io.github.klasstree.graph.NodeKind
+import org.jetbrains.kotlin.analysis.api.symbols.KaClassLikeSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaConstructorSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaSymbol
 import org.jetbrains.kotlin.psi.KtClass
@@ -16,6 +20,7 @@ import org.jetbrains.kotlin.psi.KtClassOrObject
 import org.jetbrains.kotlin.psi.KtEnumEntry
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtNamedDeclaration
+import org.jetbrains.kotlin.psi.KtNamedFunction
 import org.jetbrains.kotlin.psi.KtObjectDeclaration
 import org.jetbrains.kotlin.psi.KtProperty
 import org.jetbrains.kotlin.psi.KtTypeAlias
@@ -29,18 +34,26 @@ import java.util.IdentityHashMap
 internal class DeclarationIndex(
     private val builder: GraphBuilder,
 ) {
-    private val classNodes = IdentityHashMap<KtClassOrObject, GraphNode>()
+    private val classNodes = IdentityHashMap<PsiElement, GraphNode>()
     private val classNodesByFqName = HashMap<String, GraphNode>()
     private val typeAliasNodes = IdentityHashMap<KtTypeAlias, GraphNode>()
     private val fileScopeNodes = HashMap<String, GraphNode>()
-    private val fileInfoByFile = IdentityHashMap<KtFile, SourceFileInfo>()
-    private val documents = IdentityHashMap<KtFile, Document?>()
+    private val fileScopeAliases = HashMap<String, GraphNode>()
+    private val fileInfoByFile = IdentityHashMap<PsiFile, SourceFileInfo>()
+    private val documents = IdentityHashMap<PsiFile, Document?>()
 
     fun indexFile(info: SourceFileInfo) {
         val file = info.file
         fileInfoByFile[file] = info
+        when (file) {
+            is KtFile -> indexKotlinFile(file, info)
+            is PsiJavaFile -> indexJavaFile(file, info)
+        }
+    }
 
-        val hasTopLevelCallable = file.declarations.any { it is KtNamedDeclaration && (it is KtProperty || it is org.jetbrains.kotlin.psi.KtNamedFunction) }
+    private fun indexKotlinFile(file: KtFile, info: SourceFileInfo) {
+        val hasTopLevelCallable =
+            file.declarations.any { it is KtNamedDeclaration && (it is KtProperty || it is KtNamedFunction) }
         if (hasTopLevelCallable) {
             fileScopeNode(info)
         }
@@ -53,19 +66,57 @@ internal class DeclarationIndex(
         }
     }
 
+    private fun indexJavaFile(file: PsiJavaFile, info: SourceFileInfo) {
+        file.classes.forEach { indexJavaClass(it, info) }
+    }
+
+    private fun indexJavaClass(psiClass: PsiClass, info: SourceFileInfo) {
+        val kind = when {
+            psiClass.isAnnotationType -> NodeKind.ANNOTATION
+            psiClass.isEnum -> NodeKind.ENUM
+            psiClass.isInterface -> NodeKind.INTERFACE
+            else -> NodeKind.CLASS
+        }
+        val packageName = (info.file as? PsiJavaFile)?.packageName?.ifEmpty { null }
+        val fqName = psiClass.qualifiedName ?: psiClass.name ?: "<anonymous>"
+        val name = psiClass.name ?: "<anonymous>"
+        val offset = psiClass.nameIdentifier?.textOffset ?: psiClass.textOffset
+        val (line, column) = lineAndColumn(info.file, offset)
+        val node = GraphNode(
+            id = "${info.module.id}:${info.relativePath}#${kind.name}:$fqName",
+            kind = kind,
+            name = name,
+            fqName = fqName,
+            module = info.module.moduleLabel,
+            sourceSet = info.module.sourceSetName,
+            packageName = packageName,
+            sourceFile = info.relativePath,
+            line = line,
+            column = column,
+        )
+        classNodes[psiClass] = node
+        classNodesByFqName.putIfAbsent(fqName, node)
+        builder.addNode(node)
+        psiClass.innerClasses.forEach { indexJavaClass(it, info) }
+    }
+
     fun nodeForElement(element: PsiElement): GraphNode? {
         var current: PsiElement? = element
         while (current != null) {
             when (current) {
                 is KtClassOrObject -> classNodes[current]?.let { return it }
                 is KtTypeAlias -> typeAliasNodes[current]?.let { return it }
+                is PsiClass -> classNodes[current]?.let { return it }
             }
             current = current.parent
         }
-        val file = element.containingFile as? KtFile ?: return null
+        val file = element.containingFile ?: return null
         val info = fileInfoByFile[file] ?: return null
         return fileScopeNodes[info.absolutePath.toString()]
     }
+
+    fun nodeForQualifiedName(fqName: String): GraphNode? =
+        classNodesByFqName[fqName] ?: fileScopeAliases[fqName]
 
     fun nodeForSymbol(symbol: KaSymbol): GraphNode? {
         val psi = symbol.psi ?: symbol.realPsi ?: symbol.anchorPsi
@@ -76,21 +127,24 @@ internal class DeclarationIndex(
             if (psi is KtTypeAlias) {
                 typeAliasNodes[psi]?.let { return it }
             }
+            if (psi is PsiClass) {
+                classNodes[psi]?.let { return it }
+            }
             nodeForElement(psi)?.let { return it }
         }
 
         // Constructors (including implicit primary constructors and annotation constructors)
         // do not always expose their owning class through `psi`. Fall back to the class id so
-        // `Foo()` and `@Foo` still connect to the source class node.
-        if (symbol is KaConstructorSymbol) {
-            val fqName = symbol.containingClassId?.asSingleFqName()?.asString()
-            if (fqName != null) classNodesByFqName[fqName]?.let { return it }
-        }
+        // `Foo()` and `@Foo` still connect to the source class node. The same lookup covers Java
+        // classes, whose light symbols do not lead back to the PsiClass node either.
+        val fqName = (symbol as? KaClassLikeSymbol)?.classId?.asSingleFqName()?.asString()
+            ?: (symbol as? KaConstructorSymbol)?.containingClassId?.asSingleFqName()?.asString()
+        if (fqName != null) nodeForQualifiedName(fqName)?.let { return it }
         return null
     }
 
     fun callSite(element: PsiElement): CallSite? {
-        val file = element.containingFile as? KtFile ?: return null
+        val file = element.containingFile ?: return null
         val info = fileInfoByFile[file] ?: return null
         val (line, column) = lineAndColumn(file, element.textOffset)
         if (line == null || column == null) return null
@@ -127,7 +181,7 @@ internal class DeclarationIndex(
             fqName = fqName,
             module = info.module.moduleLabel,
             sourceSet = info.module.sourceSetName,
-            packageName = info.file.packageFqName.asString().ifEmpty { null },
+            packageName = info.packageName().ifEmpty { null },
             sourceFile = info.relativePath,
             line = line,
             column = column,
@@ -155,7 +209,7 @@ internal class DeclarationIndex(
             fqName = fqName,
             module = info.module.moduleLabel,
             sourceSet = info.module.sourceSetName,
-            packageName = info.file.packageFqName.asString().ifEmpty { null },
+            packageName = info.packageName().ifEmpty { null },
             sourceFile = info.relativePath,
             line = line,
             column = column,
@@ -165,7 +219,7 @@ internal class DeclarationIndex(
     private fun fileScopeNode(info: SourceFileInfo): GraphNode {
         val key = info.absolutePath.toString()
         return fileScopeNodes.getOrPut(key) {
-            val packageName = info.file.packageFqName.asString().ifEmpty { null }
+            val packageName = info.packageName().ifEmpty { null }
             val node = GraphNode(
                 id = "${info.module.id}:${info.relativePath}#${NodeKind.FILE_SCOPE.name}",
                 kind = NodeKind.FILE_SCOPE,
@@ -179,11 +233,23 @@ internal class DeclarationIndex(
                 column = 1,
             )
             builder.addNode(node)
+            // Java sources see Kotlin top-level members through the file facade class
+            // (`K.kt` -> `com.example.KKt`); alias the facade name back to this node.
+            val ktName = info.file.name.removeSuffix(".kt")
+            if (packageName != null && info.file.name.endsWith(".kt")) {
+                fileScopeAliases["$packageName.${ktName}Kt"] = node
+            }
             node
         }
     }
 
-    private fun document(file: KtFile): Document? {
+    private fun SourceFileInfo.packageName(): String = when (val file = file) {
+        is KtFile -> file.packageFqName.asString()
+        is PsiJavaFile -> file.packageName
+        else -> ""
+    }
+
+    private fun document(file: PsiFile): Document? {
         if (documents.containsKey(file)) return documents[file]
         val document = file.viewProvider.document
             ?: PsiDocumentManager.getInstance(file.project).getDocument(file)
@@ -191,7 +257,7 @@ internal class DeclarationIndex(
         return document
     }
 
-    private fun lineAndColumn(file: KtFile, offset: Int): Pair<Int?, Int?> {
+    private fun lineAndColumn(file: PsiFile, offset: Int): Pair<Int?, Int?> {
         val document = document(file) ?: return null to null
         val safeOffset = offset.coerceIn(0, document.textLength)
         val lineIndex = document.getLineNumber(safeOffset)

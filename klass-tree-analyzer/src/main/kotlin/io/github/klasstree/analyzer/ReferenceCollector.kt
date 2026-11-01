@@ -1,6 +1,11 @@
 package io.github.klasstree.analyzer
 
+import com.intellij.psi.PsiAnnotation
 import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiJavaCodeReferenceElement
+import com.intellij.psi.PsiLambdaExpression
+import com.intellij.psi.PsiMethodReferenceExpression
+import com.intellij.psi.PsiReferenceExpression
 import org.jetbrains.kotlin.psi.KtAnnotationEntry
 import org.jetbrains.kotlin.psi.KtArrayAccessExpression
 import org.jetbrains.kotlin.psi.KtCallExpression
@@ -32,6 +37,15 @@ internal data class AnnotationCandidate(override val element: KtAnnotationEntry)
 internal data class PropertyCandidate(override val element: PsiElement) : ReferenceCandidate
 internal data class CallableReferenceCandidate(override val element: KtCallableReferenceExpression) : ReferenceCandidate
 internal data class OperatorCandidate(override val element: KtResolvableCall) : ReferenceCandidate
+
+// Java candidates; the PSI type drives which resolve() entry point applies.
+internal data class JavaCallCandidate(override val element: PsiElement) : ReferenceCandidate
+internal data class JavaTypeCandidate(override val element: PsiJavaCodeReferenceElement) : ReferenceCandidate
+internal data class JavaInheritanceCandidate(override val element: PsiJavaCodeReferenceElement) : ReferenceCandidate
+internal data class JavaAnnotationCandidate(override val element: PsiAnnotation) : ReferenceCandidate
+internal data class JavaPropertyCandidate(override val element: PsiReferenceExpression) : ReferenceCandidate
+internal data class JavaMethodRefCandidate(override val element: PsiMethodReferenceExpression) : ReferenceCandidate
+internal data class JavaLambdaCandidate(override val element: PsiLambdaExpression) : ReferenceCandidate
 
 /**
  * Enumerates PSI locations that may represent dependencies. Resolution is deliberately kept out
