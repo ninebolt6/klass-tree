@@ -594,6 +594,470 @@ class AnalyzerTest {
         assertTrue(graph.nodes.none { it.fqName == "com.example.J" })
     }
 
+    @Test
+    fun `java anonymous class construction still reaches the named supertype`() {
+        val graph = analyze(
+            module(
+                ":app:main",
+                "Task.java" to "package com.example; public interface Task { void run(); }",
+                "Main.java" to """
+                    package com.example;
+                    public class Main {
+                        Runnable t = new Task() { public void run() {} };
+                    }
+                """,
+            ),
+        )
+        assertNotNull(
+            edge(graph, "com.example.Main", "com.example.Task", EdgeKind.CONSTRUCTOR_CALL),
+            "anonymous 'new Task(){}' must keep the reference to Task",
+        )
+    }
+
+    @Test
+    fun `java call to a JvmName facade reaches the file scope node`() {
+        val graph = analyze(
+            module(
+                ":app:main",
+                "K.kt" to """
+                    @file:JvmName("Helpers")
+                    package com.example
+
+                    fun topLevel() {}
+                """,
+                "Caller.java" to """
+                    package com.example;
+                    public class Caller {
+                        void call() { Helpers.topLevel(); }
+                    }
+                """,
+            ),
+        )
+        val fileScope = graph.nodes.single { it.kind == NodeKind.FILE_SCOPE }
+        val caller = graph.nodes.single { it.fqName == "com.example.Caller" }
+        assertTrue(
+            graph.edges.any { it.from == caller.id && it.to == fileScope.id && it.kind == EdgeKind.FUNCTION_CALL },
+            "@JvmName facade calls must resolve to the FILE_SCOPE node, got edges " + graph.edges,
+        )
+    }
+
+    @Test
+    fun `java throws static-import field and enum edges`() {
+        val graph = analyze(
+            module(
+                ":lib:main",
+                "E.java" to "package lib; public enum E { A, B }",
+                "Boom.java" to "package lib; public class Boom extends Exception {}",
+                "Const.java" to "package lib; public class Const { public static final int N = 1; }",
+            ),
+            module(
+                ":app:main",
+                "Main.java" to """
+                    package app;
+                    import static lib.Const.N;
+                    import lib.Boom;
+                    import lib.E;
+                    public class Main {
+                        int f = N;
+                        E e = E.A;
+                        void go() throws Boom { throw new Boom(); }
+                    }
+                """,
+                dependencies = listOf(":lib:main"),
+            ),
+        )
+        assertNotNull(edge(graph, "app.Main", "lib.Boom", EdgeKind.TYPE_REFERENCE), "throws clause")
+        assertNotNull(edge(graph, "app.Main", "lib.Boom", EdgeKind.CONSTRUCTOR_CALL), "throw new")
+        assertNotNull(edge(graph, "app.Main", "lib.Const", EdgeKind.PROPERTY_ACCESS), "static import field")
+        assertNotNull(edge(graph, "app.Main", "lib.E", EdgeKind.PROPERTY_ACCESS), "enum constant")
+        assertEquals(NodeKind.ENUM, graph.nodes.single { it.fqName == "lib.E" }.kind)
+        assertEquals(NodeKind.CLASS, graph.nodes.single { it.fqName == "lib.Boom" }.kind)
+    }
+
+    @Test
+    fun `java nested classes and constructor chaining`() {
+        val graph = analyze(
+            module(
+                ":app:main",
+                "Outer.java" to """
+                    package com.example;
+                    public class Outer {
+                        public static class Inner {}
+                        Outer() { this(1); }
+                        Outer(int i) {}
+                    }
+                    class Sub extends Outer.Inner {
+                        Sub() { super(); }
+                    }
+                """,
+            ),
+        )
+        assertNotNull(edge(graph, "com.example.Sub", "com.example.Outer.Inner", EdgeKind.INHERITANCE))
+        assertNotNull(edge(graph, "com.example.Sub", "com.example.Outer.Inner", EdgeKind.CONSTRUCTOR_CALL))
+        assertNotNull(
+            graph.nodes.singleOrNull { it.fqName == "com.example.Outer.Inner" },
+            "nested class must be indexed",
+        )
+    }
+
+    @Test
+    fun `java method references and lambdas`() {
+        val graph = analyze(
+            module(
+                ":app:main",
+                "Task.java" to "package com.example; public interface Task { void run(); }",
+                "Util.java" to "package com.example; public class Util { public static void work() {} }",
+                "Main.java" to """
+                    package com.example;
+                    public class Main {
+                        Runnable r1 = Util::work;
+                        Task t = () -> Util.work();
+                    }
+                """,
+            ),
+        )
+        assertNotNull(
+            edge(graph, "com.example.Main", "com.example.Util", EdgeKind.CALLABLE_REFERENCE),
+            "method reference",
+        )
+        assertNotNull(
+            edge(graph, "com.example.Main", "com.example.Task", EdgeKind.OPERATOR_OR_SYNTHETIC_CALL),
+            "lambda must reference its functional interface",
+        )
+    }
+
+    @Test
+    fun `java class literal instanceof and generic arguments`() {
+        val graph = analyze(
+            module(
+                ":app:main",
+                "Foo.java" to "package com.example; public class Foo {}",
+                "Main.java" to """
+                    package com.example;
+                    import java.util.List;
+                    public class Main {
+                        Class<?> c = Foo.class;
+                        boolean b = c instanceof Class;
+                        List<Foo> l;
+                    }
+                """,
+            ),
+        )
+        val typeRef = edge(graph, "com.example.Main", "com.example.Foo", EdgeKind.TYPE_REFERENCE)
+        assertNotNull(typeRef)
+        assertTrue(
+            typeRef.callSites.size >= 2,
+            "Foo.class and List<Foo> should produce multiple call sites, got " + typeRef.callSites,
+        )
+    }
+
+    @Test
+    fun `java references resolve across module boundaries`() {
+        val graph = analyze(
+            module(":lib:main", "L.java" to "package lib; public class L { public static void go() {} }"),
+            module(
+                ":app:main",
+                "A.java" to "package app; public class A { void m() { lib.L.go(); } }",
+                dependencies = listOf(":lib:main"),
+            ),
+        )
+        assertNotNull(edge(graph, "app.A", "lib.L", EdgeKind.FUNCTION_CALL))
+        assertEquals(0, graph.stats.resolution.unresolved)
+    }
+
+    @Test
+    fun `a broken java file does not affect other files`() {
+        val graph = analyze(
+            module(
+                ":app:main",
+                "Ok.java" to "package com.example; public class Ok {}",
+                "Broken.java" to "package com.example; public class {{{ not java at all",
+            ),
+        )
+        assertTrue(graph.stats.resolution.analysisErrors.isNotEmpty())
+        assertNotNull(graph.nodes.singleOrNull { it.fqName == "com.example.Ok" })
+    }
+
+    @Test
+    fun `package-info java and empty java file add no nodes`() {
+        val graph = analyze(
+            module(
+                ":app:main",
+                "package-info.java" to "@Deprecated package com.example;",
+                "Empty.java" to "package com.example;",
+                "K.kt" to "package com.example\nclass K",
+            ),
+        )
+        assertTrue(graph.nodes.none { it.sourceFile?.endsWith("package-info.java") == true })
+        assertTrue(graph.nodes.none { it.sourceFile?.endsWith("Empty.java") == true })
+        assertNotNull(graph.nodes.singleOrNull { it.fqName == "com.example.K" })
+    }
+
+    @Test
+    fun `java imports alone produce no edges`() {
+        val graph = analyze(
+            module(":lib:main", "L.java" to "package lib; public class L {}"),
+            module(
+                ":app:main",
+                "A.java" to """
+                    package app;
+                    import lib.L;
+                    import java.util.List;
+                    import java.util.ArrayList;
+                    public class A {}
+                """,
+                dependencies = listOf(":lib:main"),
+            ),
+        )
+        val a = graph.nodes.single { it.fqName == "app.A" }
+        assertTrue(
+            graph.edges.none { it.from == a.id },
+            "unused imports must not create edges, got " + graph.edges,
+        )
+        assertEquals(0, graph.stats.resolution.unresolved)
+    }
+
+    @Test
+    fun `kotlin sees java members as calls and property accesses`() {
+        val graph = analyze(
+            module(
+                ":app:main",
+                "Bean.java" to """
+                    package com.example;
+                    public class Bean {
+                        public static int total = 0;
+                        public String name = "";
+                        public static Bean create() { return new Bean(); }
+                    }
+                """,
+                "Use.kt" to """
+                    package com.example
+
+                    fun use(b: Bean): String {
+                        Bean.total = Bean().name.length
+                        Bean.create()
+                        return b.name
+                    }
+                """,
+            ),
+        )
+        assertNotNull(
+            edge(graph, "com.example", "com.example.Bean", EdgeKind.CONSTRUCTOR_CALL),
+            "Kotlin sees the Java constructor",
+        )
+        assertNotNull(
+            edge(graph, "com.example", "com.example.Bean", EdgeKind.PROPERTY_ACCESS),
+            "Kotlin sees Java public fields as property accesses",
+        )
+    }
+
+    @Test
+    fun `java generics varargs chained and enum-switch calls`() {
+        val graph = analyze(
+            module(
+                ":app:main",
+                "Util.java" to """
+                    package com.example;
+                    public class Util {
+                        public static <T> T id(T t) { return t; }
+                        public static String join(String... parts) { return ""; }
+                        public static Util of() { return new Util(); }
+                        public Util next() { return this; }
+                    }
+                """,
+                "Color.java" to "package com.example; public enum Color { R, G }",
+                "Main.java" to """
+                    package com.example;
+                    public class Main {
+                        String s = Util.join("a", "b");
+                        Main m = Util.id(this);
+                        Util u = Util.of().next();
+                        Color c = Color.R;
+                        String kind(Color c) { switch (c) { case R: return "r"; default: return ""; } }
+                    }
+                """,
+            ),
+        )
+        val calls = graph.edges.filter {
+            it.from == graph.nodes.single { n -> n.fqName == "com.example.Main" }.id &&
+                it.to == graph.nodes.single { n -> n.fqName == "com.example.Util" }.id &&
+                it.kind == EdgeKind.FUNCTION_CALL
+        }
+        assertTrue(
+            calls.isNotEmpty() && calls.sumOf { it.callSites.size } >= 3,
+            "join/id/of/next should all resolve, got " + calls,
+        )
+        assertNotNull(
+            edge(graph, "com.example.Main", "com.example.Color", EdgeKind.PROPERTY_ACCESS),
+            "enum constant and switch case label",
+        )
+    }
+
+    @Test
+    fun `java annotation attribute class literal adds a type edge`() {
+        val graph = analyze(
+            module(
+                ":app:main",
+                "Ann.java" to "package com.example; public @interface Ann { Class<?> value(); }",
+                "Target.java" to "package com.example; public class Target {}",
+                "Use.java" to """
+                    package com.example;
+                    @Ann(Target.class)
+                    public class Use {}
+                """,
+            ),
+        )
+        assertNotNull(edge(graph, "com.example.Use", "com.example.Ann", EdgeKind.ANNOTATION))
+        assertEquals(NodeKind.ANNOTATION, graph.nodes.single { it.fqName == "com.example.Ann" }.kind)
+        assertNotNull(
+            edge(graph, "com.example.Use", "com.example.Target", EdgeKind.TYPE_REFERENCE),
+            "annotation argument type",
+        )
+    }
+
+    @Test
+    fun `java classes with equal simple names in different packages stay distinct`() {
+        val graph = analyze(
+            module(
+                ":app:main",
+                "a/Dup.java" to "package a; public class Dup {}",
+                "b/Dup.java" to "package b; public class Dup {}",
+                "Use.java" to """
+                    package use;
+                    public class Use { a.Dup x; b.Dup y; }
+                """,
+            ),
+        )
+        assertNotNull(edge(graph, "use.Use", "a.Dup", EdgeKind.TYPE_REFERENCE))
+        assertNotNull(edge(graph, "use.Use", "b.Dup", EdgeKind.TYPE_REFERENCE))
+    }
+
+    @Test
+    fun `javadoc references do not produce edges`() {
+        val graph = analyze(
+            module(
+                ":app:main",
+                "Doc.java" to "package com.example; public class Doc {}",
+                "Use.java" to """
+                    package com.example;
+                    /** See {@link Doc} and {@link com.example.Doc#x}. */
+                    public class Use {}
+                """,
+            ),
+        )
+        val use = graph.nodes.single { it.fqName == "com.example.Use" }
+        assertTrue(
+            graph.edges.none { it.from == use.id },
+            "javadoc links must not create edges, got " + graph.edges,
+        )
+    }
+
+    @Test
+    fun `kotlin inherits java interface and java reaches kotlin object`() {
+        val graph = analyze(
+            module(
+                ":app:main",
+                "Spec.java" to "package com.example; public interface Spec { boolean ok(); }",
+                "Impl.kt" to """
+                    package com.example
+
+                    class Impl : Spec {
+                        override fun ok() = true
+                    }
+                """,
+                "Ids.kt" to """
+                    package com.example
+
+                    object Ids { const val prefix = "x" }
+                """,
+                "UseIds.java" to """
+                    package com.example;
+                    public class UseIds { String p = Ids.prefix; }
+                """,
+            ),
+        )
+        assertNotNull(
+            edge(graph, "com.example.Impl", "com.example.Spec", EdgeKind.INHERITANCE),
+            "Kotlin class implementing a Java interface",
+        )
+        assertNotNull(
+            edge(graph, "com.example.UseIds", "com.example.Ids", EdgeKind.PROPERTY_ACCESS),
+            "Java reading a Kotlin object const",
+        )
+        assertEquals(0, graph.stats.resolution.unresolved)
+    }
+
+    @Test
+    fun `java static initializer super-method and anonymous-body calls`() {
+        val graph = analyze(
+            module(
+                ":app:main",
+                "Util.java" to "package com.example; public class Util { public static void boot() {} public void m() {} }",
+                "Base.java" to "package com.example; public class Base { public void m() {} }",
+                "Sub.java" to """
+                    package com.example;
+                    public class Sub extends Base {
+                        static { Util.boot(); }
+                        public void m() { super.m(); }
+                        Runnable r = new Runnable() { public void run() { Util.boot(); } };
+                    }
+                """,
+            ),
+        )
+        val sub = graph.nodes.single { it.fqName == "com.example.Sub" }
+        val util = graph.nodes.single { it.fqName == "com.example.Util" }
+        val bootCalls = graph.edges.single {
+            it.from == sub.id && it.to == util.id && it.kind == EdgeKind.FUNCTION_CALL
+        }
+        assertTrue(
+            bootCalls.callSites.size >= 2,
+            "static-init and anonymous-body calls should attribute to Sub, got " + bootCalls.callSites,
+        )
+        assertNotNull(
+            edge(graph, "com.example.Sub", "com.example.Base", EdgeKind.FUNCTION_CALL),
+            "super.m() resolves to the parent method",
+        )
+        assertEquals(0, graph.stats.resolution.unresolved)
+    }
+
+    @Test
+    fun `java record and kotlin companion access`() {
+        val graph = analyze(
+            module(
+                ":app:main",
+                "Pair.java" to "package com.example; public record Pair(int a, int b) {}",
+                "K.kt" to """
+                    package com.example
+
+                    class K {
+                        companion object {
+                            @JvmStatic
+                            fun make() = K()
+                        }
+                    }
+                """,
+                "Use.java" to """
+                    package com.example;
+                    public class Use {
+                        Pair p = new Pair(1, 2);
+                        int total = p.a();
+                        K k = K.make();
+                    }
+                """,
+            ),
+        )
+        assertNotNull(edge(graph, "com.example.Use", "com.example.Pair", EdgeKind.CONSTRUCTOR_CALL))
+        assertNotNull(
+            edge(graph, "com.example.Use", "com.example.Pair", EdgeKind.FUNCTION_CALL),
+            "record accessor",
+        )
+        assertNotNull(
+            edge(graph, "com.example.Use", "com.example.K", EdgeKind.FUNCTION_CALL),
+            "@JvmStatic companion call",
+        )
+        assertEquals(0, graph.stats.resolution.unresolved)
+    }
+
     private fun module(
         id: String,
         vararg sources: Pair<String, String>,

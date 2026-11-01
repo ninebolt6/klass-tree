@@ -235,13 +235,19 @@ internal class DeclarationIndex(
             builder.addNode(node)
             // Java sources see Kotlin top-level members through the file facade class
             // (`K.kt` -> `com.example.KKt`); alias the facade name back to this node.
-            val ktName = info.file.name.removeSuffix(".kt")
             if (packageName != null && info.file.name.endsWith(".kt")) {
-                fileScopeAliases["$packageName.${ktName}Kt"] = node
+                val facade = (info.file as? KtFile)?.jvmNameAnnotation()
+                    ?: "${info.file.name.removeSuffix(".kt")}Kt"
+                fileScopeAliases["$packageName.$facade"] = node
             }
             node
         }
     }
+
+    private fun KtFile.jvmNameAnnotation(): String? =
+        annotationEntries
+            .firstOrNull { it.shortName?.asString() == "JvmName" }
+            ?.valueArguments?.firstOrNull()?.getArgumentExpression()?.text?.removeSurrounding("\"")
 
     private fun SourceFileInfo.packageName(): String = when (val file = file) {
         is KtFile -> file.packageFqName.asString()

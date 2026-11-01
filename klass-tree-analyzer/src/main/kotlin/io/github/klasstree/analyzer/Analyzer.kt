@@ -3,13 +3,18 @@ package io.github.klasstree.analyzer
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.util.Computable
 import com.intellij.openapi.util.Disposer
-import com.intellij.psi.PsiCallExpression
 import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiClassType
 import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiErrorElement
 import com.intellij.psi.PsiField
 import com.intellij.psi.PsiJavaFile
 import com.intellij.psi.PsiMethod
+import com.intellij.psi.PsiMethodCallExpression
+import com.intellij.psi.PsiNewExpression
+import com.intellij.psi.PsiReferenceExpression
+import com.intellij.psi.PsiVariable
+import com.intellij.psi.util.PsiTreeUtil
 import io.github.klasstree.graph.AnalysisSpec
 import io.github.klasstree.graph.DependencyGraph
 import io.github.klasstree.graph.EdgeKind
@@ -223,6 +228,11 @@ class Analyzer {
         stats: MutableResolutionStats,
     ) {
         try {
+            // A syntactically broken file still yields a PSI tree; flag it instead of silently
+            // dropping whatever did not parse.
+            if (PsiTreeUtil.findChildOfType(info.file, PsiErrorElement::class.java) != null) {
+                stats.analysisErrors += "${info.relativePath}: PSI parse errors"
+            }
             val candidates = when (val file = info.file) {
                 is KtFile -> ReferenceCollector.collect(file)
                 is PsiJavaFile -> JavaReferenceCollector.collect(file)
@@ -395,15 +405,70 @@ class Analyzer {
             }
 
             is JavaCallCandidate -> {
-                val call = candidate.element as? PsiCallExpression
-                val method = call?.resolveMethod()
-                if (method == null) {
-                    stats.unresolved++
-                    return
+                when (val call = candidate.element) {
+                    is PsiNewExpression -> {
+                        // `new Foo(){}` keeps the referenced class on the anonymous class, and
+                        // implicit default constructors never resolve through resolveMethod();
+                        // the declared class reference is the edge target either way.
+                        val ref = call.anonymousClass?.baseClassReference ?: call.classReference
+                        val resolved = ref?.resolve() as? PsiClass
+                        if (resolved == null) {
+                            stats.unresolved++
+                            return
+                        }
+                        handleJavaResolved(
+                            resolved,
+                            candidate.element,
+                            EdgeKind.CONSTRUCTOR_CALL,
+                            index,
+                            stats,
+                        )
+                    }
+
+                    is PsiMethodCallExpression -> {
+                        val refName = call.methodExpression.referenceName
+                        if (refName == "super" || refName == "this") {
+                            // resolveMethod() on constructor chains goes through Cls mirror
+                            // services that a standalone session does not have; resolve the
+                            // superclass structurally instead.
+                            val chained = chainedConstructorTarget(call)
+                            if (chained == null) {
+                                stats.skipped++
+                                return
+                            }
+                            handleJavaResolved(
+                                chained,
+                                candidate.element,
+                                EdgeKind.CONSTRUCTOR_CALL,
+                                index,
+                                stats,
+                            )
+                            return
+                        }
+                        val method = call.resolveMethod()
+                        // Record accessors and other methods this session cannot resolve still
+                        // name their receiver type; the graph only needs the owning class.
+                        val target = method?.containingClass ?: qualifierReceiverClass(call)
+                        if (target == null) {
+                            if (method == null) stats.unresolved++ else stats.skipped++
+                            return
+                        }
+                        val kind = if (method?.isConstructor == true) {
+                            EdgeKind.CONSTRUCTOR_CALL
+                        } else {
+                            EdgeKind.FUNCTION_CALL
+                        }
+                        handleJavaResolved(
+                            target,
+                            candidate.element,
+                            kind,
+                            index,
+                            stats,
+                        )
+                    }
+
+                    else -> stats.skipped++
                 }
-                val kind =
-                    if (method.isConstructor) EdgeKind.CONSTRUCTOR_CALL else EdgeKind.FUNCTION_CALL
-                handleJavaResolved(method.containingClass, candidate.element, kind, index, stats)
             }
 
             is JavaTypeCandidate -> {
@@ -486,6 +551,27 @@ class Analyzer {
                     stats,
                 )
             }
+        }
+    }
+
+    private fun qualifierReceiverClass(call: PsiMethodCallExpression): PsiClass? {
+        val qualifier = call.methodExpression.qualifierExpression as? PsiReferenceExpression
+            ?: return null
+        return when (val resolved = qualifier.resolve()) {
+            is PsiClass -> resolved
+            is PsiVariable -> (resolved.type as? PsiClassType)?.resolve()
+            is PsiMethod -> (resolved.returnType as? PsiClassType)?.resolve()
+            else -> null
+        }
+    }
+
+    // `super(...)` and `this(...)` resolve the target structurally: the owner's extends list for
+    // `super`, the owner itself for `this` (which then lands in selfEdgesSkipped).
+    private fun chainedConstructorTarget(call: PsiMethodCallExpression): PsiClass? {
+        val owner = PsiTreeUtil.getParentOfType(call, PsiClass::class.java) ?: return null
+        return when (call.methodExpression.referenceName) {
+            "super" -> owner.extendsList?.referenceElements?.firstOrNull()?.resolve() as? PsiClass
+            else -> owner
         }
     }
 

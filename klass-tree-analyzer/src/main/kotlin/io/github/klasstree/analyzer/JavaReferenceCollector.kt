@@ -5,6 +5,7 @@ import com.intellij.psi.PsiAnnotation
 import com.intellij.psi.PsiClassObjectAccessExpression
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiImportStatementBase
+import com.intellij.psi.javadoc.PsiDocComment
 import com.intellij.psi.PsiJavaCodeReferenceElement
 import com.intellij.psi.PsiJavaFile
 import com.intellij.psi.PsiLambdaExpression
@@ -65,6 +66,8 @@ internal object JavaReferenceCollector {
         reference: PsiJavaCodeReferenceElement,
     ): ReferenceCandidate? {
         if (PsiTreeUtil.getParentOfType(reference, PsiImportStatementBase::class.java) != null) return null
+        // `{@link ...}` is documentation, not a dependency.
+        if (PsiTreeUtil.getParentOfType(reference, PsiDocComment::class.java) != null) return null
         val parent = reference.parent
         return when {
             parent is PsiReferenceList &&
