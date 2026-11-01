@@ -9,19 +9,17 @@ It resolves references semantically with the Kotlin Analysis API (Standalone) an
 Only declarations in the analyzed source sets become nodes. References to JDK and library classes
 are resolved and counted in `stats.resolution`, but no external nodes are emitted.
 
-Early milestone: Kotlin Multiplatform, Android, and Java sources are not supported yet.
-
 ## Requirements
 
 - JDK 21 (the analyzer runs on a Java 21 runtime);
 - Gradle 9.x;
-- Kotlin JVM Gradle plugin `2.5.0-Beta2` on the **root buildscript classpath** — the plugin uses
-  KGP API types, so it must be declared even if only with `apply false`;
+- The Kotlin JVM Gradle plugin on the **root buildscript classpath** — the plugin uses KGP API
+  types, so it must be declared even if only with `apply false`;
 - `mavenCentral()` so the isolated `klassTreeAnalyzer` configuration can resolve the Analysis API.
 
 ## Using the plugin
 
-Not published yet; consume it as an included build:
+Consume it as an included build:
 
 ```kotlin
 // settings.gradle.kts
@@ -48,10 +46,6 @@ applied to the root project; applying it elsewhere fails with an explicit error.
 ```shell
 ./gradlew klassTree
 ```
-
-The task is up-to-date checked and supports the configuration cache.
-
-`example/` is a runnable two-module project wired exactly like this; see [Example](#example).
 
 ## Configuration
 
@@ -165,12 +159,10 @@ sorted by file, line, and column.
 | `OPERATOR_OR_SYNTHETIC_CALL` | Operator conventions, array access, delegated-property access, for-loop iteration, destructuring `componentN`, and synthetic calls |
 
 Generated members are skipped except constructors (so `Foo()` and `@Foo` connect to their class).
-Library, Java-source, package, type-parameter, and local symbols do not produce edges; they are
-counted in `stats.resolution` instead.
+Library, package, type-parameter, and local symbols do not produce edges; they are counted in
+`stats.resolution` instead.
 
 ## JSON schema
-
-`schemaVersion` is currently `1`.
 
 ```json
 {
@@ -261,8 +253,6 @@ analyzes two modules (`api` depends on `shared`).
 ./gradlew -p example klassTree -PklassTreeTests=true  # include test sources
 ```
 
-Outputs go to `example/build/klass-tree/`.
-
 ## Limitations
 
 - Kotlin JVM only (Kotlin Multiplatform, Android, and other platforms are not supported). Java
@@ -282,5 +272,4 @@ Outputs go to `example/build/klass-tree/`.
 ```shell
 ./gradlew build          # compile, test, and check all modules
 ./gradlew :klass-tree-analyzer:test # analyzer integration test
-./gradlew -p example klassTree
 ```
