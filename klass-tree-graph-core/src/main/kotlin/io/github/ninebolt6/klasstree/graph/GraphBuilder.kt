@@ -24,9 +24,6 @@ class GraphBuilder {
     fun build(
         generatedAt: String,
         projectRoot: String,
-        elapsedMillis: Long,
-        resolution: ResolutionStats,
-        sourceFileCount: Int,
     ): DependencyGraph {
         val sortedNodes = nodes.values.sortedWith(compareBy({ it.module }, { it.sourceSet }, { it.id }))
         val sortedEdges = edges.entries
@@ -44,14 +41,6 @@ class GraphBuilder {
             projectRoot = projectRoot,
             nodes = sortedNodes,
             edges = sortedEdges,
-            stats = GraphStats(
-                nodeCount = sortedNodes.size,
-                edgeCount = sortedEdges.size,
-                callSiteCount = sortedEdges.sumOf { it.callSites.size },
-                sourceFileCount = sourceFileCount,
-                elapsedMillis = elapsedMillis,
-                resolution = resolution,
-            ),
         )
     }
 }

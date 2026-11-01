@@ -67,33 +67,11 @@ data class GraphEdge(
 )
 
 @Serializable
-data class ResolutionStats(
-    val candidates: Int = 0,
-    val resolvedSource: Int = 0,
-    val resolvedExternal: Int = 0,
-    val unresolved: Int = 0,
-    val skipped: Int = 0,
-    val selfEdgesSkipped: Int = 0,
-    val analysisErrors: List<String> = emptyList(),
-)
-
-@Serializable
-data class GraphStats(
-    val nodeCount: Int,
-    val edgeCount: Int,
-    val callSiteCount: Int,
-    val sourceFileCount: Int,
-    val elapsedMillis: Long,
-    val resolution: ResolutionStats = ResolutionStats(),
-)
-
-@Serializable
 data class DependencyGraph(
-    val schemaVersion: Int = 1,
+    val schemaVersion: Int = 2,
     val generator: String = "klass-tree",
     val generatedAt: String,
     val projectRoot: String,
     val nodes: List<GraphNode>,
     val edges: List<GraphEdge>,
-    val stats: GraphStats,
 )

@@ -1,7 +1,5 @@
 package io.github.ninebolt6.klasstree.analyzer
 
-import io.github.ninebolt6.klasstree.graph.ResolutionStats
-
 internal class MutableResolutionStats {
     var candidates: Int = 0
     var resolvedSource: Int = 0

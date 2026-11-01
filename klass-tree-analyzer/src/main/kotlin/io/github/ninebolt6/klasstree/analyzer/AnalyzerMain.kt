@@ -32,7 +32,8 @@ fun main(args: Array<String>) {
 
     try {
         val spec = KlassTreeJson.decodeFromString<AnalysisSpec>(Files.readString(specFile))
-        val graph = Analyzer().analyze(spec, disposeGlobalServices = true)
+        val result = Analyzer().analyze(spec, disposeGlobalServices = true)
+        val graph = result.graph
 
         Files.createDirectories(outputDirectory)
 
@@ -48,19 +49,19 @@ fun main(args: Array<String>) {
         }
 
         println(
-            "klass-tree: ${graph.stats.nodeCount} nodes, ${graph.stats.edgeCount} edges, " +
-                "${graph.stats.callSiteCount} call sites -> $outputDirectory",
+            "klass-tree: ${result.stats.nodeCount} nodes, ${result.stats.edgeCount} edges, " +
+                "${result.stats.callSiteCount} call sites -> $outputDirectory",
         )
         println(
-            "klass-tree: candidates=${graph.stats.resolution.candidates}, " +
-                "source=${graph.stats.resolution.resolvedSource}, " +
-                "external=${graph.stats.resolution.resolvedExternal}, " +
-                "unresolved=${graph.stats.resolution.unresolved}, " +
-                "skipped=${graph.stats.resolution.skipped}, " +
-                "self=${graph.stats.resolution.selfEdgesSkipped}, " +
-                "errors=${graph.stats.resolution.analysisErrors.size}",
+            "klass-tree: candidates=${result.stats.resolution.candidates}, " +
+                "source=${result.stats.resolution.resolvedSource}, " +
+                "external=${result.stats.resolution.resolvedExternal}, " +
+                "unresolved=${result.stats.resolution.unresolved}, " +
+                "skipped=${result.stats.resolution.skipped}, " +
+                "self=${result.stats.resolution.selfEdgesSkipped}, " +
+                "errors=${result.stats.resolution.analysisErrors.size}",
         )
-        graph.stats.resolution.analysisErrors.forEach { println("klass-tree: analysis error: $it") }
+        result.stats.resolution.analysisErrors.forEach { println("klass-tree: analysis error: $it") }
         exitProcess(0)
     } catch (throwable: Throwable) {
         throwable.printStackTrace()

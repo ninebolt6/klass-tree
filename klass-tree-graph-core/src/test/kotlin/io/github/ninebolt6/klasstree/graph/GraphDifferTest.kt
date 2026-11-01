@@ -30,7 +30,6 @@ class GraphDifferTest {
         projectRoot = "/p",
         nodes = nodes,
         edges = edges,
-        stats = GraphStats(nodes.size, edges.size, edges.sumOf { it.callSites.size }, 1, 0),
     )
 
     private val a = node("a.A")
@@ -117,15 +116,5 @@ class GraphDifferTest {
             first.removedNodes.map { it.fqName },
         )
         assertEquals(first.addedEdges.map { it.kind }, second.removedEdges.map { it.kind })
-    }
-
-    @Test
-    fun `stats differences do not produce changes`() {
-        val baseline = graph(listOf(a), emptyList())
-        val current = baseline.copy(
-            stats = GraphStats(99, 99, 99, 99, 99, ResolutionStats(candidates = 5)),
-        )
-
-        assertFalse(GraphDiffer.diff(baseline, current).hasChanges)
     }
 }

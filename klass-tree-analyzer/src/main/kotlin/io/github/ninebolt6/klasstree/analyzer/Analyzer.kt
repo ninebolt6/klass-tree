@@ -7,7 +7,6 @@ import com.intellij.psi.PsiErrorElement
 import com.intellij.psi.PsiJavaFile
 import com.intellij.psi.util.PsiTreeUtil
 import io.github.ninebolt6.klasstree.graph.AnalysisSpec
-import io.github.ninebolt6.klasstree.graph.DependencyGraph
 import io.github.ninebolt6.klasstree.graph.GraphBuilder
 import org.jetbrains.kotlin.analysis.api.KaExperimentalApi
 import org.jetbrains.kotlin.analysis.api.session.analyze
@@ -23,7 +22,7 @@ import java.time.Instant
  */
 @OptIn(KaExperimentalApi::class)
 class Analyzer {
-    fun analyze(spec: AnalysisSpec, disposeGlobalServices: Boolean = false): DependencyGraph {
+    fun analyze(spec: AnalysisSpec, disposeGlobalServices: Boolean = false): AnalysisResult {
         require(spec.modules.isNotEmpty()) {
             "The analysis spec contains no modules. Nothing can be analyzed."
         }
@@ -37,7 +36,7 @@ class Analyzer {
             // requirement, this avoids acquiring a read action once per file, which is measurable
             // on modules with thousands of files.
             return ApplicationManager.getApplication().runReadAction(
-                Computable<DependencyGraph> {
+                Computable<AnalysisResult> {
                     val fileInfos = collectFileInfos(session, spec)
                     val builder = GraphBuilder()
                     val index = DeclarationIndex(builder)
@@ -61,12 +60,20 @@ class Analyzer {
                         )
                     }
 
-                    builder.build(
+                    val graph = builder.build(
                         generatedAt = Instant.now().toString(),
                         projectRoot = spec.projectRoot,
-                        elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000,
-                        resolution = resolution,
-                        sourceFileCount = fileInfos.size,
+                    )
+                    AnalysisResult(
+                        graph = graph,
+                        stats = GraphStats(
+                            nodeCount = graph.nodes.size,
+                            edgeCount = graph.edges.size,
+                            callSiteCount = graph.edges.sumOf { it.callSites.size },
+                            sourceFileCount = fileInfos.size,
+                            elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000,
+                            resolution = resolution,
+                        ),
                     )
                 },
             )

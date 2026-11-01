@@ -46,14 +46,11 @@ class GraphBuilderTest {
         val graph = builder.build(
             generatedAt = "2026-01-01T00:00:00Z",
             projectRoot = "/project",
-            elapsedMillis = 10,
-            resolution = ResolutionStats(candidates = 3, resolvedSource = 3),
-            sourceFileCount = 1,
         )
 
         assertEquals(2, graph.nodes.size)
         assertEquals(2, graph.edges.size)
-        assertEquals(3, graph.stats.callSiteCount)
+        assertEquals(3, graph.edges.sumOf { it.callSites.size })
         assertEquals(
             listOf(CallSite("Service.kt", 10, 5), CallSite("Service.kt", 12, 9)),
             graph.edges.single { it.kind == EdgeKind.FUNCTION_CALL }.callSites,
@@ -71,9 +68,6 @@ class GraphBuilderTest {
         val graph = builder.build(
             generatedAt = "2026-01-01T00:00:00Z",
             projectRoot = "/project",
-            elapsedMillis = 1,
-            resolution = ResolutionStats(),
-            sourceFileCount = 1,
         )
 
         assertEquals(listOf("a.A", "m.M", "z.Z"), graph.nodes.map { it.id })
@@ -96,9 +90,6 @@ class GraphBuilderTest {
         val graph = builder.build(
             generatedAt = "2026-01-01T00:00:00Z",
             projectRoot = "/project",
-            elapsedMillis = 1,
-            resolution = ResolutionStats(),
-            sourceFileCount = 1,
         )
 
         assertEquals(

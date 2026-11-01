@@ -60,17 +60,17 @@ class LeakProbeTest {
             }
 
             usedHeap()
-            val graph1 = Analyzer().analyze(spec)
+            val result1 = Analyzer().analyze(spec)
             val afterFirst = usedHeap()
             repeat(2) {
-                val graph = Analyzer().analyze(spec)
-                assertTrue(graph.nodes.isNotEmpty())
+                val result = Analyzer().analyze(spec)
+                assertTrue(result.graph.nodes.isNotEmpty())
             }
             val afterThird = usedHeap()
 
             println(
                 "HEAP afterFirst=$afterFirst afterThird=$afterThird " +
-                    "nodes=${graph1.nodes.size} edges=${graph1.edges.size}",
+                    "nodes=${result1.graph.nodes.size} edges=${result1.graph.edges.size}",
             )
             assertTrue(
                 afterThird < afterFirst * 1.5 + 32L * 1024 * 1024,

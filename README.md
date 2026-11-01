@@ -7,7 +7,7 @@ It resolves references semantically with the Kotlin Analysis API (Standalone) an
 - `graph.dot` — an optional Graphviz rendering derived from the JSON output.
 
 Only declarations in the analyzed source sets become nodes. References to JDK and library classes
-are resolved and counted in `stats.resolution`, but no external nodes are emitted.
+are resolved but no external nodes are emitted.
 
 ## Requirements
 
@@ -158,8 +158,8 @@ sorted by file, line, and column.
 | `OPERATOR_OR_SYNTHETIC_CALL` | Operator conventions, array access, delegated-property access, for-loop iteration, destructuring `componentN`, and synthetic calls |
 
 Generated members are skipped except constructors (so `Foo()` and `@Foo` connect to their class).
-Library, package, type-parameter, and local symbols do not produce edges; they are counted in
-`stats.resolution` instead.
+Library, package, type-parameter, and local symbols do not produce edges; they are counted in the
+analyzer's run summary instead.
 
 ## JSON schema
 
@@ -197,30 +197,14 @@ Library, package, type-parameter, and local symbols do not produce edges; they a
       ]
     }
   ],
-  "stats": {
-    "nodeCount": 13,
-    "edgeCount": 34,
-    "callSiteCount": 40,
-    "sourceFileCount": 9,
-    "elapsedMillis": 1657,
-    "resolution": {
-      "candidates": 147,
-      "resolvedSource": 56,
-      "resolvedExternal": 40,
-      "unresolved": 0,
-      "skipped": 51,
-      "selfEdgesSkipped": 16,
-      "analysisErrors": []
-    }
-  }
 }
 ```
 
 - `module` is the project path without the leading colon (`root` for the root project).
 - Paths are relative to `projectRoot` with forward slashes; `line`/`column` are 1-based.
 - Nullable fields are omitted.
-- `analysisErrors` lists files or individual references that failed; it fails the build only when
-  `failOnAnalysisError` is enabled.
+- Files or references that could not be analyzed are reported in the analyzer output; the build
+  fails only when `failOnAnalysisError` is enabled.
 
 ## Architecture
 

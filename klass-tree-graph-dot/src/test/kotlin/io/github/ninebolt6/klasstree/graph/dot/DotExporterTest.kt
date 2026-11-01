@@ -5,7 +5,6 @@ import io.github.ninebolt6.klasstree.graph.DependencyGraph
 import io.github.ninebolt6.klasstree.graph.EdgeKind
 import io.github.ninebolt6.klasstree.graph.GraphEdge
 import io.github.ninebolt6.klasstree.graph.GraphNode
-import io.github.ninebolt6.klasstree.graph.GraphStats
 import io.github.ninebolt6.klasstree.graph.NodeKind
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -47,13 +46,6 @@ class DotExporterTest {
                 kind = EdgeKind.TYPE_REFERENCE,
                 callSites = listOf(CallSite("shared/src/User.kt", 5, 12)),
             ),
-        ),
-        stats = GraphStats(
-            nodeCount = 2,
-            edgeCount = 1,
-            callSiteCount = 1,
-            sourceFileCount = 2,
-            elapsedMillis = 5,
         ),
     )
 
