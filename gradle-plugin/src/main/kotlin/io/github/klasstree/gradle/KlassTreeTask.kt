@@ -1,5 +1,8 @@
 package io.github.klasstree.gradle
 
+import io.github.klasstree.graph.AnalysisSpec
+import io.github.klasstree.graph.KlassTreeJson
+import kotlinx.serialization.builtins.ListSerializer
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.file.ConfigurableFileCollection
@@ -19,18 +22,28 @@ import java.io.File
 import javax.inject.Inject
 
 /**
- * Writes the analysis spec and launches the analyzer in a separate JVM.
+ * Aggregates module specs and launches the analyzer in a separate JVM.
  *
  * The Gradle daemon never loads Analysis API or IntelliJ platform classes. [analysisClasspath]
- * contains the isolated `klassTreeAnalyzer` configuration; [analyzerClasspath] contains this
- * plugin's own runtime (analyzer + graph-core + serialization + Kotlin stdlib).
+ * contains the isolated `klassTreeAnalyzer` configuration; [analyzerClasspath] contains the
+ * analyzer and its graph/serialization runtime.
  */
 abstract class KlassTreeTask : DefaultTask() {
-    @get:Input
-    abstract val specJson: Property<String>
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val moduleSpecFiles: ConfigurableFileCollection
 
     @get:OutputDirectory
     abstract val outputDirectory: DirectoryProperty
+
+    @get:Input
+    abstract val projectRoot: Property<String>
+
+    @get:Input
+    abstract val failOnAnalysisError: Property<Boolean>
+
+    @get:Input
+    abstract val includeTests: Property<Boolean>
 
     @get:Input
     abstract val formats: SetProperty<String>
@@ -53,10 +66,40 @@ abstract class KlassTreeTask : DefaultTask() {
 
     @TaskAction
     fun analyze() {
+        val candidates = moduleSpecFiles.files.flatMap { file ->
+            KlassTreeJson.decodeFromString(
+                ListSerializer(AnalysisModuleCandidate.serializer()),
+                file.readText(),
+            )
+        }
+        val modules = ModuleSpecs.build(candidates)
+        if (modules.isEmpty()) {
+            throw GradleException(
+                "klass-tree found no Kotlin source roots in the analyzed projects. " +
+                    "Check the Kotlin source set layout" +
+                    if (!includeTests.get()) " or enable klassTree.includeTests." else ".",
+            )
+        }
+
+        logger.lifecycle("klass-tree: analyzing ${modules.size} module(s)")
+        modules.forEach { module ->
+            logger.info(
+                "klass-tree: module ${module.id} (${module.sourceRoots.size} source root(s), " +
+                    "${module.classpath.size} classpath entries)",
+            )
+        }
+
+        val spec = AnalysisSpec(
+            projectRoot = projectRoot.get(),
+            modules = modules,
+            includeExternalSymbols = false,
+            includeJavaSources = false,
+            failOnAnalysisError = failOnAnalysisError.get(),
+        )
         val output = outputDirectory.get().asFile
         output.mkdirs()
         val specFile = File(output, "analysis-spec.json")
-        specFile.writeText(specJson.get())
+        specFile.writeText(KlassTreeJson.encodeToString(AnalysisSpec.serializer(), spec))
 
         val result = execOperations.javaexec { spec ->
             spec.classpath = analysisClasspath + analyzerClasspath

@@ -1,7 +1,5 @@
 package io.github.klasstree.gradle
 
-import io.github.klasstree.graph.AnalysisSpec
-import io.github.klasstree.graph.KlassTreeJson
 import org.gradle.api.GradleException
 import org.gradle.api.Plugin
 import org.gradle.api.Project
@@ -61,6 +59,15 @@ class KlassTreePlugin : Plugin<Project> {
             }
         }
 
+        val moduleDependencyScope = project.configurations.dependencyScope("klassTreeModules")
+        val moduleSpecConfiguration = project.configurations.resolvable("klassTreeModuleSpecs") { configuration ->
+            configuration.extendsFrom(moduleDependencyScope)
+            configuration.attributes.attribute(
+                Usage.USAGE_ATTRIBUTE,
+                project.objects.named(Usage::class.java, "klass-tree-module-spec"),
+            )
+        }
+
         val task = project.tasks.register("klassTree", KlassTreeTask::class.java) { task ->
             task.group = "documentation"
             task.description = "Writes a source-level Kotlin dependency graph (JSON and DOT)."
@@ -69,17 +76,19 @@ class KlassTreePlugin : Plugin<Project> {
             task.analyzerJvmArgs.set(extension.analyzerJvmArgs)
             task.analysisClasspath.from(analyzerConfiguration)
             task.analyzerClasspath.from(PluginClasspath.resolve())
+            task.moduleSpecFiles.from(moduleSpecConfiguration)
+            task.projectRoot.set(project.rootProject.projectDir.absolutePath)
+            task.failOnAnalysisError.set(extension.failOnAnalysisError)
+            task.includeTests.set(extension.includeTests)
         }
 
-        // Resolve each project's compile classpath while that project's configuration is still
-        // locked for evaluation. Resolving another project's configuration later (for example in
-        // projectsEvaluated) is rejected by Gradle 9.
-        val candidates = mutableListOf<AnalysisModuleCandidate>()
+        val projectScans = mutableMapOf<String, KotlinProjectScan>()
         var scannerError: Throwable? = null
         fun scan(projectToScan: Project) {
             if (!projectToScan.plugins.hasPlugin("org.jetbrains.kotlin.jvm")) return
             try {
-                candidates += KotlinProjectScanner.collectProject(projectToScan, extension)
+                projectScans[projectToScan.path] =
+                    KotlinProjectScanner.configureProject(projectToScan, extension.includeTests.get())
             } catch (error: LinkageError) {
                 scannerError = error
             }
@@ -130,40 +139,27 @@ class KlassTreePlugin : Plugin<Project> {
                 )
             }
 
-            val modules = KotlinProjectScanner.buildModules(candidates)
-
-            if (modules.isEmpty()) {
-                throw GradleException(
-                    "klass-tree found no Kotlin source roots in the analyzed projects. " +
-                        "Check the Kotlin source set layout" +
-                        if (!extension.includeTests.get()) " or enable klassTree.includeTests." else ".",
-                )
+            kotlinProjects.forEach { kotlinProject ->
+                if (kotlinProject == project.rootProject) {
+                    projectScans[kotlinProject.path]?.moduleTasks?.forEach { moduleTask ->
+                        task.configure { klassTreeTask ->
+                            klassTreeTask.moduleSpecFiles.from(moduleTask.flatMap { it.outputFile })
+                        }
+                    }
+                } else {
+                    project.dependencies.add(
+                        moduleDependencyScope.name,
+                        project.dependencies.project(mapOf("path" to kotlinProject.path)),
+                    )
+                }
             }
 
-            val spec = AnalysisSpec(
-                projectRoot = project.rootProject.projectDir.absolutePath,
-                modules = modules,
-                includeExternalSymbols = false,
-                includeJavaSources = false,
-                failOnAnalysisError = extension.failOnAnalysisError.get(),
-            )
-            val specJson = KlassTreeJson.encodeToString(AnalysisSpec.serializer(), spec)
-
-            task.configure { task ->
-                task.specJson.set(specJson)
-                task.formats.set(formats)
-                task.analyzerJvmArgs.set(extension.analyzerJvmArgs)
-                task.sourceFiles.from(modules.flatMap { it.sourceRoots })
+            val sourceDirectories = projectScans.values.flatMap { it.sourceDirectories }
+            task.configure { klassTreeTask ->
+                klassTreeTask.sourceFiles.from(sourceDirectories)
             }
-
-            project.logger.lifecycle(
-                "klass-tree: analyzing ${modules.size} module(s) in ${kotlinProjects.size} project(s)",
-            )
-            modules.forEach { module ->
-                project.logger.info(
-                    "klass-tree: module ${module.id} (${module.sourceRoots.size} source root(s), " +
-                        "${module.classpath.size} classpath entries)",
-                )
+            task.configure { klassTreeTask ->
+                klassTreeTask.formats.set(formats)
             }
         }
     }

@@ -262,12 +262,13 @@ The project is split into three modules:
 | --- | --- |
 | `graph-core` | Platform-independent graph model, `AnalysisSpec`, edge merging, JSON and DOT exporters. No Gradle or Analysis API dependency. |
 | `analyzer` | Analysis API Standalone session construction, declaration indexing, PSI candidate collection, semantic resolution, and the forked entry point. |
-| `gradle-plugin` | Root plugin, extension, Kotlin source-set/classpath scanner, and the task that launches the analyzer. |
+| `gradle-plugin` | Root plugin, extension, per-source-set module-spec tasks, and the task that launches the analyzer. |
 
 Data flow:
 
-1. The plugin scans Kotlin JVM projects, resolves each compilation's source roots and compile
-   classpath, and serializes an `AnalysisSpec`.
+1. The plugin registers one module-spec task per selected Kotlin JVM source set. At execution,
+   those tasks collect source roots and external compile dependencies; the root task aggregates
+   their outputs and serializes an `AnalysisSpec`.
 2. `KlassTreeTask` forks a separate JVM with two classpaths: the isolated `klassTreeAnalyzer`
    configuration (Analysis API and its transitive dependencies) and the plugin's own runtime.
 3. The analyzer builds a Standalone Analysis API session, indexes source declarations, resolves
@@ -304,6 +305,8 @@ Outputs are written to `fixtures/build/klass-tree/`.
 - Kotlin JVM only; Kotlin Multiplatform and Android are not handled.
 - Java sources are skipped.
 - Project dependencies are mapped to the target project's `main` module.
+- Dependencies on projects from included builds are not put on the analysis classpath because
+  project components are filtered out.
 - External library declarations do not become nodes or edges.
 - Members are aggregated into their owning class or file scope; there are no member-level nodes.
 - Generated members other than constructors are excluded.
