@@ -64,11 +64,19 @@ class Analyzer {
 
                     val specsById = spec.modules.associateBy { it.id }
                     val builtModules = LinkedHashMap<String, KaSourceModule>()
-                    // Large multi-module builds usually share most of their external classpath.
-                    // Reusing one library module per distinct classpath avoids indexing the same
-                    // jars once per source module.
-                    val builtLibraries = LinkedHashMap<List<String>, KaLibraryModule>()
+                    // One library module per normalized classpath entry is shared across source modules.
+                    // This indexes each jar once even when module classpaths differ slightly.
+                    val builtLibraries = LinkedHashMap<Path, KaLibraryModule>()
                     val building = LinkedHashSet<String>()
+
+                    fun libraryFor(path: Path): KaLibraryModule =
+                        builtLibraries.getOrPut(path) {
+                            buildKtLibraryModule {
+                                platform = JvmPlatforms.defaultJvmPlatform
+                                libraryName = "lib:${builtLibraries.size}"
+                                addBinaryRoots(listOf(path))
+                            }
+                        }
 
                     fun buildSourceModule(id: String): KaSourceModule {
                         builtModules[id]?.let { return it }
@@ -78,20 +86,10 @@ class Analyzer {
                             "Cyclic analysis module dependency: ${building.joinToString(" -> ")} -> $id"
                         }
                         try {
-                            val libraryRoots = moduleSpec.classpath
-                                .map { Path.of(it) }
+                            val libraryPaths = moduleSpec.classpath
+                                .map { Path.of(it).toAbsolutePath().normalize() }
                                 .filter { Files.exists(it) }
-                            val library = if (libraryRoots.isNotEmpty()) {
-                                builtLibraries.getOrPut(moduleSpec.classpath) {
-                                    buildKtLibraryModule {
-                                        platform = JvmPlatforms.defaultJvmPlatform
-                                        libraryName = "libs:${builtLibraries.size}"
-                                        addBinaryRoots(libraryRoots)
-                                    }
-                                }
-                            } else {
-                                null
-                            }
+                                .distinct()
 
                             val module = buildKtSourceModule {
                                 platform = JvmPlatforms.defaultJvmPlatform
@@ -100,7 +98,7 @@ class Analyzer {
                                     moduleSpec.sourceRoots.map { Path.of(it) }.filter { Files.exists(it) },
                                 )
                                 addRegularDependency(sdk)
-                                if (library != null) addRegularDependency(library)
+                                libraryPaths.forEach { addRegularDependency(libraryFor(it)) }
                                 moduleSpec.dependencies.forEach { dependencyId ->
                                     if (specsById.containsKey(dependencyId)) {
                                         addRegularDependency(buildSourceModule(dependencyId))
@@ -137,7 +135,7 @@ class Analyzer {
                     val resolution = stats.toImmutable()
                     if (spec.failOnAnalysisError && resolution.analysisErrors.isNotEmpty()) {
                         throw IllegalStateException(
-                            "klass-tree: ${resolution.analysisErrors.size} file(s) failed to analyze:\n" +
+                            "klass-tree: ${resolution.analysisErrors.size} analysis error(s):\n" +
                                 resolution.analysisErrors.joinToString("\n") { "  - $it" },
                         )
                     }
@@ -195,7 +193,23 @@ class Analyzer {
         try {
             analyze(info.file) {
                 for (candidate in candidates) {
-                    resolveCandidate(candidate, index, stats)
+                    try {
+                        resolveCandidate(candidate, index, stats)
+                    } catch (exception: Exception) {
+                        stats.analysisErrors += buildString {
+                            append(info.relativePath)
+                            index.callSite(candidate.element)?.let { site ->
+                                append(':')
+                                append(site.line)
+                                append(':')
+                                append(site.column)
+                            }
+                            append(": ")
+                            append(exception::class.simpleName)
+                            append(": ")
+                            append(exception.message)
+                        }
+                    }
                 }
             }
         } catch (exception: Exception) {

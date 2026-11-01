@@ -122,6 +122,8 @@ internal object ReferenceCollector {
     }
 
     private fun shouldCollectQualified(expression: KtQualifiedExpression): Boolean {
+        // `x.foo()` is already represented by CallCandidate.
+        if (expression.selectorExpression is KtCallExpression) return false
         val parent = expression.parent
         if (parent is KtCallExpression && parent.calleeExpression === expression) return false
         if (expression.getStrictParentOfType<KtImportDirective>() != null) return false

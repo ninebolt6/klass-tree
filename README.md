@@ -251,8 +251,8 @@ Notes:
 - `sourceFile` and call-site `file` paths are relative to `projectRoot`, with forward slashes.
 - `line` and `column` are 1-based.
 - `fqName` is omitted when it cannot be determined. Nullable fields are omitted from the JSON.
-- `stats.resolution.analysisErrors` lists files that failed to analyze. They fail the build only
-  when `failOnAnalysisError` is enabled.
+- `stats.resolution.analysisErrors` lists files or individual references that failed to analyze.
+  They fail the build only when `failOnAnalysisError` is enabled.
 
 ## Architecture
 
