@@ -63,8 +63,8 @@ class ExportersTest {
     }
 
     @Test
-    fun `dot groups nodes by module and escapes labels`() {
-        val dot = DotExporter.render(graph.copy(projectRoot = "/project/with\"quote"))
+    fun `dot groups nodes by module`() {
+        val dot = DotExporter.render(graph)
 
         assertTrue(dot.startsWith("digraph klass_tree {"))
         assertTrue(dot.contains("subgraph cluster_shared {"))

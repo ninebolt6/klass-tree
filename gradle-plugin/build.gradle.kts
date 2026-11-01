@@ -4,6 +4,8 @@ plugins {
     `java-gradle-plugin`
 }
 
+val testPluginClasspath = configurations.create("testPluginClasspath")
+
 dependencies {
     implementation(project(":graph-core"))
     implementation(project(":analyzer"))
@@ -16,6 +18,7 @@ dependencies {
     testImplementation(gradleTestKit())
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    add(testPluginClasspath.name, "org.jetbrains.kotlin:kotlin-gradle-plugin:2.5.0-Beta2")
 }
 
 gradlePlugin {
@@ -35,4 +38,8 @@ kotlin {
 
 tasks.test {
     useJUnitPlatform()
+}
+
+tasks.pluginUnderTestMetadata {
+    pluginClasspath.from(testPluginClasspath)
 }

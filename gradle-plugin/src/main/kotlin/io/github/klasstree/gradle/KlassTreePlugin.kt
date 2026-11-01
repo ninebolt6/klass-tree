@@ -140,18 +140,10 @@ class KlassTreePlugin : Plugin<Project> {
             }
 
             kotlinProjects.forEach { kotlinProject ->
-                if (kotlinProject == project.rootProject) {
-                    projectScans[kotlinProject.path]?.moduleTasks?.forEach { moduleTask ->
-                        task.configure { klassTreeTask ->
-                            klassTreeTask.moduleSpecFiles.from(moduleTask.flatMap { it.outputFile })
-                        }
-                    }
-                } else {
-                    project.dependencies.add(
-                        moduleDependencyScope.name,
-                        project.dependencies.project(mapOf("path" to kotlinProject.path)),
-                    )
-                }
+                project.dependencies.add(
+                    moduleDependencyScope.name,
+                    project.dependencies.project(mapOf("path" to kotlinProject.path)),
+                )
             }
 
             val sourceDirectories = projectScans.values.flatMap { it.sourceDirectories }

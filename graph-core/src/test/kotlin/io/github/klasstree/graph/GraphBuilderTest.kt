@@ -81,6 +81,33 @@ class GraphBuilderTest {
     }
 
     @Test
+    fun `deduplicates and sorts call sites for one edge`() {
+        val builder = GraphBuilder()
+        val service = node("com.example.Service")
+        val repository = node("com.example.Repository")
+        builder.addNode(service)
+        builder.addNode(repository)
+
+        builder.addEdge(service.id, repository.id, EdgeKind.FUNCTION_CALL, CallSite("b.kt", 3, 1))
+        builder.addEdge(service.id, repository.id, EdgeKind.FUNCTION_CALL, CallSite("a.kt", 9, 9))
+        builder.addEdge(service.id, repository.id, EdgeKind.FUNCTION_CALL, CallSite("b.kt", 1, 5))
+        builder.addEdge(service.id, repository.id, EdgeKind.FUNCTION_CALL, CallSite("b.kt", 1, 5))
+
+        val graph = builder.build(
+            generatedAt = "2026-01-01T00:00:00Z",
+            projectRoot = "/project",
+            elapsedMillis = 1,
+            resolution = ResolutionStats(),
+            sourceFileCount = 1,
+        )
+
+        assertEquals(
+            listOf(CallSite("a.kt", 9, 9), CallSite("b.kt", 1, 5), CallSite("b.kt", 3, 1)),
+            graph.edges.single().callSites,
+        )
+    }
+
+    @Test
     fun `rejects a node id collision with different content`() {
         val builder = GraphBuilder()
         builder.addNode(node("com.example.A"))

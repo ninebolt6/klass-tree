@@ -103,12 +103,10 @@ internal class DeclarationIndex(
 
     private fun indexClass(declaration: KtClassOrObject, info: SourceFileInfo) {
         if (declaration is KtEnumEntry) return
-        if (!declaration.isLocal) {
-            val node = createClassNode(declaration, info)
-            classNodes[declaration] = node
-            node.fqName?.let { classNodesByFqName.putIfAbsent(it, node) }
-            builder.addNode(node)
-        }
+        val node = createClassNode(declaration, info)
+        classNodes[declaration] = node
+        node.fqName?.let { classNodesByFqName.putIfAbsent(it, node) }
+        builder.addNode(node)
         declaration.declarations.forEach { child ->
             when (child) {
                 is KtClassOrObject -> indexClass(child, info)
