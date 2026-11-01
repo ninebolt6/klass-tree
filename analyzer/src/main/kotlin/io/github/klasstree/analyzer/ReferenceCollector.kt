@@ -53,11 +53,8 @@ internal object ReferenceCollector {
             }
 
             override fun visitCallExpression(expression: KtCallExpression) {
-                // A supertype constructor call is already represented by INHERITANCE. The call
-                // expression of an annotation is represented by ANNOTATION.
-                val isSuperTypeCall = expression.getStrictParentOfType<KtSuperTypeListEntry>() != null
-                val isAnnotationCall = expression.parent is KtAnnotationEntry
-                if (!isSuperTypeCall && !isAnnotationCall) {
+                // The call expression of an annotation is represented by ANNOTATION.
+                if (expression.parent !is KtAnnotationEntry) {
                     result += CallCandidate(expression)
                 }
                 super.visitCallExpression(expression)
@@ -104,7 +101,10 @@ internal object ReferenceCollector {
 
             override fun visitReferenceExpression(expression: org.jetbrains.kotlin.psi.KtReferenceExpression) {
                 when (expression) {
-                    is KtOperationReferenceExpression -> result += OperatorCandidate(expression)
+                    is KtOperationReferenceExpression ->
+                        if (expression.text !in NON_CALLABLE_OPERATORS) {
+                            result += OperatorCandidate(expression)
+                        }
                     is KtNameReferenceExpression -> if (shouldCollectName(expression)) {
                         result += PropertyCandidate(expression)
                     }
@@ -114,6 +114,9 @@ internal object ReferenceCollector {
         })
         return result
     }
+
+    // These operators have no callable symbol to resolve.
+    private val NON_CALLABLE_OPERATORS = setOf("is", "!is", "as", "as?", "&&", "||", "?:")
 
     private fun shouldCollectType(type: KtUserType): Boolean {
         // Only the outermost user type of a qualified name; resolving every segment would turn

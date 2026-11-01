@@ -336,6 +336,39 @@ class AnalyzerTest {
         assertEquals(emptyList(), graph.stats.resolution.analysisErrors)
     }
 
+    @Test
+    fun `collects supertype constructor arguments and ignores non-callable operators`() {
+        val graph = analyze(
+            module(
+                ":app:main",
+                "Model.kt" to """
+                package com.example
+
+                class Helper {
+                    fun h() = 1
+                }
+
+                open class Base(val n: Int)
+
+                class Mid : Base(Helper().h())
+
+                class Uses(val m: Mid) {
+                    fun a() = m is Mid
+                    fun b(x: Mid?) = x ?: m
+                    fun c(x: Mid?) = x as Mid
+                    fun d(a: Boolean, b: Boolean) = a && b
+                }
+                """,
+            ),
+        )
+
+        assertNotNull(edge(graph, "com.example.Mid", "com.example.Helper", EdgeKind.CONSTRUCTOR_CALL))
+        assertNotNull(edge(graph, "com.example.Mid", "com.example.Helper", EdgeKind.FUNCTION_CALL))
+        assertNotNull(edge(graph, "com.example.Mid", "com.example.Base", EdgeKind.INHERITANCE))
+        assertEquals(0, graph.stats.resolution.unresolved)
+        assertEquals(emptyList(), graph.stats.resolution.analysisErrors)
+    }
+
     private fun module(
         id: String,
         vararg sources: Pair<String, String>,
