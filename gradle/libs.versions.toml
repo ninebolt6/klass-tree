@@ -1,0 +1,19 @@
+[versions]
+kotlin = "2.5.0-Beta2"
+junit = "5.11.4"
+kotlinx-serialization = "1.9.0"
+detekt = "2.0.0-alpha.6"
+ktlint = "2.0.0-ALPHA-4"
+
+[libraries]
+junit-jupiter = { group = "org.junit.jupiter", name = "junit-jupiter", version.ref = "junit" }
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
+kotlin-analysis-api = { group = "org.jetbrains.kotlin", name = "kotlin-analysis-api", version.ref = "kotlin" }
+kotlin-gradle-plugin-api = { group = "org.jetbrains.kotlin", name = "kotlin-gradle-plugin-api", version.ref = "kotlin" }
+kotlin-gradle-plugin = { group = "org.jetbrains.kotlin", name = "kotlin-gradle-plugin", version.ref = "kotlin" }
+ktlint-cli = { group = "io.github.ktlint.core", name = "ktlint-cli", version.ref = "ktlint" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+detekt = { id = "dev.detekt", version.ref = "detekt" }

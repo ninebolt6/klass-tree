@@ -8,11 +8,11 @@ dependencies {
 
     // The Analysis API is provided by the Gradle plugin's isolated analysis configuration at
     // runtime, so it is not exposed as a transitive dependency of the plugin.
-    compileOnly("org.jetbrains.kotlin:kotlin-analysis-api:2.5.0-Beta2")
+    compileOnly(libs.kotlin.analysis.api)
 
-    testImplementation("org.jetbrains.kotlin:kotlin-analysis-api:2.5.0-Beta2")
+    testImplementation(libs.kotlin.analysis.api)
     testImplementation(kotlin("test"))
-    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+    testImplementation(libs.junit.jupiter)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

@@ -12,13 +12,13 @@ dependencies {
 
     // The Kotlin Gradle plugin is supplied by the consuming build. The plugin only needs the
     // public Gradle API to enumerate Kotlin source sets and compile dependencies.
-    compileOnly("org.jetbrains.kotlin:kotlin-gradle-plugin-api:2.5.0-Beta2")
+    compileOnly(libs.kotlin.gradle.plugin.api)
 
     testImplementation(kotlin("test"))
     testImplementation(gradleTestKit())
-    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+    testImplementation(libs.junit.jupiter)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-    add(testPluginClasspath.name, "org.jetbrains.kotlin:kotlin-gradle-plugin:2.5.0-Beta2")
+    add(testPluginClasspath.name, libs.kotlin.gradle.plugin)
 }
 
 gradlePlugin {

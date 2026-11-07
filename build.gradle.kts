@@ -1,7 +1,7 @@
 plugins {
-    kotlin("jvm") version "2.5.0-Beta2" apply false
-    kotlin("plugin.serialization") version "2.5.0-Beta2" apply false
-    id("dev.detekt") version "2.0.0-alpha.6" apply false
+    alias(libs.plugins.kotlin.jvm) apply false
+    alias(libs.plugins.kotlin.serialization) apply false
+    alias(libs.plugins.detekt) apply false
 }
 
 allprojects {
@@ -12,7 +12,7 @@ allprojects {
 val ktlintCli = configurations.create("ktlintCli")
 
 dependencies {
-    ktlintCli("io.github.ktlint.core:ktlint-cli:2.0.0-ALPHA-4:all@jar")
+    ktlintCli("${libs.ktlint.cli.get()}:all@jar")
 }
 
 val ktlintPatterns =
