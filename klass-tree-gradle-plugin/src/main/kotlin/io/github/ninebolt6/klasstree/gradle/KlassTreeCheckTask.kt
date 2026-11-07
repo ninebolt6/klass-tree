@@ -68,21 +68,25 @@ abstract class KlassTreeCheckTask : DefaultTask() {
         if (targets.isEmpty()) return
 
         val nodesById = current.nodes.associateBy { it.id }
-        val violations = buildList {
-            diff.addedEdges.forEach { edge ->
-                if (edge.to.matchesAny(targets, nodesById)) add(describe(edge, nodesById))
-            }
-            diff.edgeDeltas.forEach { delta ->
-                if (delta.to.matchesAny(targets, nodesById) && delta.addedCallSites.isNotEmpty()) {
-                    add(describe(delta, nodesById))
+        val violations =
+            buildList {
+                diff.addedEdges.forEach { edge ->
+                    if (edge.to.matchesAny(targets, nodesById)) add(describe(edge, nodesById))
+                }
+                diff.edgeDeltas.forEach { delta ->
+                    if (delta.to.matchesAny(targets, nodesById) && delta.addedCallSites.isNotEmpty()) {
+                        add(describe(delta, nodesById))
+                    }
                 }
             }
-        }
         val baselineNodesById = baseline.nodes.associateBy { it.id }
+
         fun isDeniedTarget(nodeId: String) =
-            nodesById[nodeId].matchesAny(targets) || baselineNodesById[nodeId].matchesAny(targets)
-        val progress = diff.removedEdges.count { isDeniedTarget(it.to) } +
-            diff.edgeDeltas.count { it.removedCallSites.isNotEmpty() && isDeniedTarget(it.to) }
+            nodesById[nodeId].matchesAny(targets) ||
+                baselineNodesById[nodeId].matchesAny(targets)
+        val progress =
+            diff.removedEdges.count { isDeniedTarget(it.to) } +
+                diff.edgeDeltas.count { it.removedCallSites.isNotEmpty() && isDeniedTarget(it.to) }
         if (progress > 0) {
             logger.lifecycle("klass-tree: $progress denied reference(s) removed since the baseline")
         }
@@ -94,10 +98,13 @@ abstract class KlassTreeCheckTask : DefaultTask() {
         }
     }
 
-    private fun decode(content: String, file: java.io.File): DependencyGraph =
+    private fun decode(
+        content: String,
+        file: java.io.File,
+    ): DependencyGraph =
         try {
             KlassTreeJson.decodeFromString(DependencyGraph.serializer(), content)
-        } catch (exception: Exception) {
+        } catch (exception: IllegalArgumentException) {
             throw GradleException("klass-tree: cannot parse $file: ${exception.message}", exception)
         }
 
@@ -107,30 +114,40 @@ abstract class KlassTreeCheckTask : DefaultTask() {
         file.writeText(KlassTreeJson.encodeToString(GraphDiff.serializer(), diff))
     }
 
-    private fun String.matchesAny(targets: List<String>, nodesById: Map<String, GraphNode>): Boolean =
-        nodesById[this].matchesAny(targets)
+    private fun String.matchesAny(
+        targets: List<String>,
+        nodesById: Map<String, GraphNode>,
+    ): Boolean = nodesById[this].matchesAny(targets)
 
     private fun GraphNode?.matchesAny(targets: List<String>): Boolean =
-        this != null && targets.any { prefix ->
-            fqName.matchesTarget(prefix) || packageName.matchesTarget(prefix)
-        }
+        this != null &&
+            targets.any { prefix ->
+                fqName.matchesTarget(prefix) || packageName.matchesTarget(prefix)
+            }
 
     // A target covers the declaration itself plus members and nested packages, but must not
     // match names that merely share a prefix (e.g. `User` must not deny `UserIndex`).
-    private fun String?.matchesTarget(prefix: String): Boolean =
-        this == prefix || this?.startsWith("$prefix.") == true
+    private fun String?.matchesTarget(prefix: String): Boolean = this == prefix || this?.startsWith("$prefix.") == true
 
-    private fun describe(edge: GraphEdge, nodesById: Map<String, GraphNode>): String {
+    private fun describe(
+        edge: GraphEdge,
+        nodesById: Map<String, GraphNode>,
+    ): String {
         val sites = edge.callSites.joinToString(", ") { "${it.file}:${it.line}" }
         return "+ ${label(edge.from, nodesById)} -> ${label(edge.to, nodesById)} ${edge.kind}" +
             if (sites.isNotEmpty()) " @ $sites" else ""
     }
 
-    private fun describe(delta: GraphEdgeDelta, nodesById: Map<String, GraphNode>): String {
+    private fun describe(
+        delta: GraphEdgeDelta,
+        nodesById: Map<String, GraphNode>,
+    ): String {
         val sites = delta.addedCallSites.joinToString(", ") { "${it.file}:${it.line}" }
         return "+ ${label(delta.from, nodesById)} -> ${label(delta.to, nodesById)} ${delta.kind} @ $sites"
     }
 
-    private fun label(nodeId: String, nodesById: Map<String, GraphNode>): String =
-        nodesById[nodeId]?.let { it.fqName ?: it.name } ?: nodeId
+    private fun label(
+        nodeId: String,
+        nodesById: Map<String, GraphNode>,
+    ): String = nodesById[nodeId]?.let { it.fqName ?: it.name } ?: nodeId
 }

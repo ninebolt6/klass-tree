@@ -6,7 +6,10 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class GraphDifferTest {
-    private fun node(id: String, module: String = "app") = GraphNode(
+    private fun node(
+        id: String,
+        module: String = "app",
+    ) = GraphNode(
         id = id,
         kind = NodeKind.CLASS,
         name = id.substringAfterLast("."),
@@ -16,8 +19,12 @@ class GraphDifferTest {
         packageName = id.substringBeforeLast(".", ""),
     )
 
-    private fun edge(from: String, to: String, kind: EdgeKind, vararg sites: CallSite) =
-        GraphEdge(from = from, to = to, kind = kind, callSites = sites.toList())
+    private fun edge(
+        from: String,
+        to: String,
+        kind: EdgeKind,
+        vararg sites: CallSite,
+    ) = GraphEdge(from = from, to = to, kind = kind, callSites = sites.toList())
 
     private fun site(line: Int) = CallSite("Api.kt", line, 1)
 
@@ -46,19 +53,21 @@ class GraphDifferTest {
 
     @Test
     fun `added and removed nodes and edges are reported`() {
-        val baseline = graph(
-            listOf(a, b, c),
-            listOf(
-                edge(a.id, b.id, EdgeKind.FUNCTION_CALL),
-                edge(b.id, c.id, EdgeKind.TYPE_REFERENCE),
-            ),
-        )
-        val current = graph(
-            listOf(a, b),
-            listOf(
-                edge(a.id, c.id, EdgeKind.CONSTRUCTOR_CALL),
-            ),
-        )
+        val baseline =
+            graph(
+                listOf(a, b, c),
+                listOf(
+                    edge(a.id, b.id, EdgeKind.FUNCTION_CALL),
+                    edge(b.id, c.id, EdgeKind.TYPE_REFERENCE),
+                ),
+            )
+        val current =
+            graph(
+                listOf(a, b),
+                listOf(
+                    edge(a.id, c.id, EdgeKind.CONSTRUCTOR_CALL),
+                ),
+            )
 
         val diff = GraphDiffer.diff(baseline, current)
 
@@ -79,14 +88,16 @@ class GraphDifferTest {
 
     @Test
     fun `call site changes on surviving edges become deltas`() {
-        val baseline = graph(
-            listOf(a, b),
-            listOf(edge(a.id, b.id, EdgeKind.FUNCTION_CALL, site(3), site(7))),
-        )
-        val current = graph(
-            listOf(a, b),
-            listOf(edge(a.id, b.id, EdgeKind.FUNCTION_CALL, site(3), site(9))),
-        )
+        val baseline =
+            graph(
+                listOf(a, b),
+                listOf(edge(a.id, b.id, EdgeKind.FUNCTION_CALL, site(3), site(7))),
+            )
+        val current =
+            graph(
+                listOf(a, b),
+                listOf(edge(a.id, b.id, EdgeKind.FUNCTION_CALL, site(3), site(9))),
+            )
 
         val diff = GraphDiffer.diff(baseline, current)
 
@@ -99,14 +110,16 @@ class GraphDifferTest {
 
     @Test
     fun `diff output is deterministic regardless of input order`() {
-        val baseline = graph(
-            listOf(b, a, c),
-            listOf(edge(b.id, c.id, EdgeKind.TYPE_REFERENCE), edge(a.id, b.id, EdgeKind.FUNCTION_CALL)),
-        )
-        val current = graph(
-            listOf(c, a),
-            listOf(edge(a.id, c.id, EdgeKind.CONSTRUCTOR_CALL)),
-        )
+        val baseline =
+            graph(
+                listOf(b, a, c),
+                listOf(edge(b.id, c.id, EdgeKind.TYPE_REFERENCE), edge(a.id, b.id, EdgeKind.FUNCTION_CALL)),
+            )
+        val current =
+            graph(
+                listOf(c, a),
+                listOf(edge(a.id, c.id, EdgeKind.CONSTRUCTOR_CALL)),
+            )
 
         val first = GraphDiffer.diff(baseline, current)
         val second = GraphDiffer.diff(current.copy(nodes = current.nodes.reversed()), baseline)

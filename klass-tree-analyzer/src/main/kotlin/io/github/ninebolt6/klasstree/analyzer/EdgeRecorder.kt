@@ -8,22 +8,31 @@ internal class EdgeRecorder(
     private val index: DeclarationIndex,
     private val stats: MutableResolutionStats,
 ) {
-    fun record(to: GraphNode, element: PsiElement, kind: EdgeKind) {
+    fun record(
+        to: GraphNode,
+        element: PsiElement,
+        kind: EdgeKind,
+    ) {
         val from = index.nodeForElement(element)
-        if (from == null) {
-            stats.skipped++
-            return
+        when {
+            from == null -> {
+                stats.skipped++
+            }
+
+            from.id == to.id -> {
+                stats.resolvedSource++
+                stats.selfEdgesSkipped++
+            }
+
+            else -> {
+                stats.resolvedSource++
+                val callSite = index.callSite(element)
+                if (callSite == null) {
+                    stats.skipped++
+                } else {
+                    index.addEdge(from, to, kind, callSite)
+                }
+            }
         }
-        stats.resolvedSource++
-        if (from.id == to.id) {
-            stats.selfEdgesSkipped++
-            return
-        }
-        val callSite = index.callSite(element)
-        if (callSite == null) {
-            stats.skipped++
-            return
-        }
-        index.addEdge(from, to, kind, callSite)
     }
 }

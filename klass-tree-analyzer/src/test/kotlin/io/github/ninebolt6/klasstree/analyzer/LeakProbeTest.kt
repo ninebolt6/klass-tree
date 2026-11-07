@@ -12,43 +12,7 @@ class LeakProbeTest {
     fun `repeated analyze calls release the session`() {
         val root = Files.createTempDirectory("klass-tree-leak-probe")
         try {
-            val src = root.resolve("src")
-            Files.createDirectories(src)
-            repeat(60) { i ->
-                src.resolve("Kt$i.kt").toFile().writeText(
-                    """
-                    package com.example
-
-                    class Kt$i(private val other: J$i) {
-                        fun go() = other.work()
-                    }
-                    """.trimIndent(),
-                )
-                src.resolve("J$i.java").toFile().writeText(
-                    """
-                    package com.example;
-                    public class J$i {
-                        public void work() {}
-                        Kt$i k = new Kt$i(this);
-                    }
-                    """.trimIndent(),
-                )
-            }
-            val spec = AnalysisSpec(
-                projectRoot = root.toString(),
-                includeJavaSources = true,
-                modules = listOf(
-                    ModuleSpec(
-                        id = ":app:main",
-                        projectPath = ":app",
-                        sourceSetName = "main",
-                        moduleName = "app_main",
-                        sourceRoots = listOf(src.toString()),
-                        classpath = listOf(stdlib()),
-                        dependencies = emptyList(),
-                    ),
-                ),
-            )
+            val spec = writeProbeSpec(root)
 
             fun usedHeap(): Long {
                 repeat(3) {
@@ -82,7 +46,50 @@ class LeakProbeTest {
         }
     }
 
+    private fun writeProbeSpec(root: java.nio.file.Path): AnalysisSpec {
+        val src = root.resolve("src")
+        Files.createDirectories(src)
+        repeat(60) { i ->
+            src.resolve("Kt$i.kt").toFile().writeText(
+                """
+                package com.example
+
+                class Kt$i(private val other: J$i) {
+                    fun go() = other.work()
+                }
+                """.trimIndent(),
+            )
+            src.resolve("J$i.java").toFile().writeText(
+                """
+                package com.example;
+                public class J$i {
+                    public void work() {}
+                    Kt$i k = new Kt$i(this);
+                }
+                """.trimIndent(),
+            )
+        }
+        return AnalysisSpec(
+            projectRoot = root.toString(),
+            includeJavaSources = true,
+            modules =
+                listOf(
+                    ModuleSpec(
+                        id = ":app:main",
+                        projectPath = ":app",
+                        sourceSetName = "main",
+                        moduleName = "app_main",
+                        sourceRoots = listOf(src.toString()),
+                        classpath = listOf(stdlib()),
+                        dependencies = emptyList(),
+                    ),
+                ),
+        )
+    }
+
     private fun stdlib(): String =
-        System.getProperty("java.class.path").split(File.pathSeparator)
+        System
+            .getProperty("java.class.path")
+            .split(File.pathSeparator)
             .first { it.contains("kotlin-stdlib") }
 }

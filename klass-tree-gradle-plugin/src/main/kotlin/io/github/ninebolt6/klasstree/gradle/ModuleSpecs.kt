@@ -26,13 +26,16 @@ internal object ModuleSpecs {
                 moduleName = uniqueModuleName,
                 sourceRoots = candidate.sourceRoots,
                 classpath = candidate.classpath,
-                dependencies = dependencyIds
-                    .filter { it != candidate.moduleId && it in includedIds }
-                    .sorted(),
+                dependencies =
+                    dependencyIds
+                        .filter { it != candidate.moduleId && it in includedIds }
+                        .sorted(),
             )
         }
     }
 }
 
-internal fun moduleId(projectPath: String, sourceSetName: String): String =
-    (if (projectPath == ":") ":" else "$projectPath:") + sourceSetName
+internal fun moduleId(
+    projectPath: String,
+    sourceSetName: String,
+): String = (if (projectPath == ":") ":" else "$projectPath:") + sourceSetName

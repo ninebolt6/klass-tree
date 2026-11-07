@@ -12,7 +12,6 @@ data class AnalysisSpec(
     val modules: List<ModuleSpec>,
     /** When true, any per-file analysis error fails the analyzer process. */
     val failOnAnalysisError: Boolean = false,
-
     /** When false, `.java` files under source roots are ignored entirely. */
     val includeJavaSources: Boolean = true,
 )

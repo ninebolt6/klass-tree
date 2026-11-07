@@ -11,6 +11,10 @@ data class GraphDiff(
     val edgeDeltas: List<GraphEdgeDelta> = emptyList(),
 ) {
     val hasChanges: Boolean
-        get() = addedNodes.isNotEmpty() || removedNodes.isNotEmpty() ||
-            addedEdges.isNotEmpty() || removedEdges.isNotEmpty() || edgeDeltas.isNotEmpty()
+        get() =
+            addedNodes.isNotEmpty() ||
+                removedNodes.isNotEmpty() ||
+                addedEdges.isNotEmpty() ||
+                removedEdges.isNotEmpty() ||
+                edgeDeltas.isNotEmpty()
 }

@@ -6,15 +6,19 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class GraphBuilderTest {
-    private fun node(id: String, kind: NodeKind = NodeKind.CLASS): GraphNode = GraphNode(
-        id = id,
-        kind = kind,
-        name = id.substringAfterLast('.'),
-        fqName = id,
-        module = "shared",
-        sourceSet = "main",
-        sourceFile = "shared/src/main/kotlin/$id.kt",
-    )
+    private fun node(
+        id: String,
+        kind: NodeKind = NodeKind.CLASS,
+    ): GraphNode =
+        GraphNode(
+            id = id,
+            kind = kind,
+            name = id.substringAfterLast('.'),
+            fqName = id,
+            module = "shared",
+            sourceSet = "main",
+            sourceFile = "shared/src/main/kotlin/$id.kt",
+        )
 
     @Test
     fun `merges repeated edges and keeps all call sites`() {
@@ -43,10 +47,11 @@ class GraphBuilderTest {
             CallSite("Service.kt", 3, 20),
         )
 
-        val graph = builder.build(
-            generatedAt = "2026-01-01T00:00:00Z",
-            projectRoot = "/project",
-        )
+        val graph =
+            builder.build(
+                generatedAt = "2026-01-01T00:00:00Z",
+                projectRoot = "/project",
+            )
 
         assertEquals(2, graph.nodes.size)
         assertEquals(2, graph.edges.size)
@@ -65,10 +70,11 @@ class GraphBuilderTest {
         builder.addEdge("z.Z", "a.A", EdgeKind.TYPE_REFERENCE, CallSite("z.kt", 1, 1))
         builder.addEdge("a.A", "m.M", EdgeKind.INHERITANCE, CallSite("a.kt", 1, 1))
 
-        val graph = builder.build(
-            generatedAt = "2026-01-01T00:00:00Z",
-            projectRoot = "/project",
-        )
+        val graph =
+            builder.build(
+                generatedAt = "2026-01-01T00:00:00Z",
+                projectRoot = "/project",
+            )
 
         assertEquals(listOf("a.A", "m.M", "z.Z"), graph.nodes.map { it.id })
         assertEquals(listOf("a.A", "z.Z"), graph.edges.map { it.from })
@@ -87,10 +93,11 @@ class GraphBuilderTest {
         builder.addEdge(service.id, repository.id, EdgeKind.FUNCTION_CALL, CallSite("b.kt", 1, 5))
         builder.addEdge(service.id, repository.id, EdgeKind.FUNCTION_CALL, CallSite("b.kt", 1, 5))
 
-        val graph = builder.build(
-            generatedAt = "2026-01-01T00:00:00Z",
-            projectRoot = "/project",
-        )
+        val graph =
+            builder.build(
+                generatedAt = "2026-01-01T00:00:00Z",
+                projectRoot = "/project",
+            )
 
         assertEquals(
             listOf(CallSite("a.kt", 9, 9), CallSite("b.kt", 1, 5), CallSite("b.kt", 3, 1)),

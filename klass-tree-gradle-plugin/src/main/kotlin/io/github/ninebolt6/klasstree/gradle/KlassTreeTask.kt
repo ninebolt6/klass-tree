@@ -69,12 +69,13 @@ abstract class KlassTreeTask : DefaultTask() {
 
     @TaskAction
     fun analyze() {
-        val candidates = moduleSpecFiles.files.flatMap { file ->
-            KlassTreeJson.decodeFromString(
-                ListSerializer(AnalysisModuleCandidate.serializer()),
-                file.readText(),
-            )
-        }
+        val candidates =
+            moduleSpecFiles.files.flatMap { file ->
+                KlassTreeJson.decodeFromString(
+                    ListSerializer(AnalysisModuleCandidate.serializer()),
+                    file.readText(),
+                )
+            }
         val modules = ModuleSpecs.build(candidates)
         if (modules.isEmpty()) {
             throw GradleException(
@@ -92,28 +93,30 @@ abstract class KlassTreeTask : DefaultTask() {
             )
         }
 
-        val spec = AnalysisSpec(
-            projectRoot = projectRoot.get(),
-            modules = modules,
-            failOnAnalysisError = failOnAnalysisError.get(),
-            includeJavaSources = includeJavaSources.get(),
-        )
+        val spec =
+            AnalysisSpec(
+                projectRoot = projectRoot.get(),
+                modules = modules,
+                failOnAnalysisError = failOnAnalysisError.get(),
+                includeJavaSources = includeJavaSources.get(),
+            )
         val output = outputDirectory.get().asFile
         output.mkdirs()
         val specFile = File(output, "analysis-spec.json")
         specFile.writeText(KlassTreeJson.encodeToString(AnalysisSpec.serializer(), spec))
 
-        val result = execOperations.javaexec { javaexec ->
-            javaexec.classpath = analysisClasspath + analyzerClasspath
-            javaexec.mainClass.set("io.github.ninebolt6.klasstree.analyzer.AnalyzerMainKt")
-            javaexec.args(
-                specFile.absolutePath,
-                output.absolutePath,
-                formats.get().sorted().joinToString(","),
-            )
-            analyzerJvmArgs.get().forEach(javaexec::jvmArgs)
-            javaexec.isIgnoreExitValue = true
-        }
+        val result =
+            execOperations.javaexec { javaexec ->
+                javaexec.classpath = analysisClasspath + analyzerClasspath
+                javaexec.mainClass.set("io.github.ninebolt6.klasstree.analyzer.AnalyzerMainKt")
+                javaexec.args(
+                    specFile.absolutePath,
+                    output.absolutePath,
+                    formats.get().sorted().joinToString(","),
+                )
+                analyzerJvmArgs.get().forEach(javaexec::jvmArgs)
+                javaexec.isIgnoreExitValue = true
+            }
 
         if (result.exitValue != 0) {
             throw GradleException(

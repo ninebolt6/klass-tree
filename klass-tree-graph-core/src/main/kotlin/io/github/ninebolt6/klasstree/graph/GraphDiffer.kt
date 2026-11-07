@@ -6,7 +6,10 @@ package io.github.ninebolt6.klasstree.graph
  * All output lists are sorted to keep serialized diffs stable.
  */
 object GraphDiffer {
-    fun diff(baseline: DependencyGraph, current: DependencyGraph): GraphDiff {
+    fun diff(
+        baseline: DependencyGraph,
+        current: DependencyGraph,
+    ): GraphDiff {
         val baselineNodes = baseline.nodes.associateBy { it.id }
         val currentNodes = current.nodes.associateBy { it.id }
         val baselineEdges = baseline.edges.associateBy { edgeKey(it) }
@@ -31,7 +34,8 @@ object GraphDiffer {
         baseline: Map<EdgeKey, GraphEdge>,
         current: Map<EdgeKey, GraphEdge>,
     ): List<GraphEdgeDelta> =
-        current.keys.intersect(baseline.keys)
+        current.keys
+            .intersect(baseline.keys)
             .mapNotNull { key ->
                 val added = current.getValue(key).callSites - baseline.getValue(key).callSites.toSet()
                 val removed = baseline.getValue(key).callSites - current.getValue(key).callSites.toSet()
@@ -46,12 +50,15 @@ object GraphDiffer {
                         removedCallSites = removed.sortedWith(callSiteOrder),
                     )
                 }
-            }
-            .sortedWith(compareBy({ it.from }, { it.to }, { it.kind.name }))
+            }.sortedWith(compareBy({ it.from }, { it.to }, { it.kind.name }))
 
     private fun edgeKey(edge: GraphEdge) = EdgeKey(edge.from, edge.to, edge.kind)
 
     private val callSiteOrder = compareBy<CallSite>({ it.file }, { it.line }, { it.column })
 
-    private data class EdgeKey(val from: String, val to: String, val kind: EdgeKind)
+    private data class EdgeKey(
+        val from: String,
+        val to: String,
+        val kind: EdgeKind,
+    )
 }

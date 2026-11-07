@@ -43,22 +43,39 @@ internal sealed interface KotlinSymbolCandidate : ReferenceCandidate {
     val kind: EdgeKind
 }
 
-internal data class TypeReferenceCandidate(override val element: KtUserType) : KotlinSymbolCandidate {
+internal data class TypeReferenceCandidate(
+    override val element: KtUserType,
+) : KotlinSymbolCandidate {
     override val kind: EdgeKind get() = EdgeKind.TYPE_REFERENCE
 }
 
-internal data class InheritanceCandidate(override val element: KtSuperTypeListEntry) : KotlinSymbolCandidate {
+internal data class InheritanceCandidate(
+    override val element: KtSuperTypeListEntry,
+) : KotlinSymbolCandidate {
     override val kind: EdgeKind get() = EdgeKind.INHERITANCE
 }
 
-internal data class CallCandidate(override val element: KtCallExpression) : ReferenceCandidate
+internal data class CallCandidate(
+    override val element: KtCallExpression,
+) : ReferenceCandidate
 
 // Not a KotlinSymbolCandidate: it must resolve through the KtAnnotationEntry overload of
 // resolveSuccessfulSymbol, which returns the constructor symbol rather than the class symbol.
-internal data class AnnotationCandidate(override val element: KtAnnotationEntry) : ReferenceCandidate
-internal data class PropertyCandidate(override val element: PsiElement) : ReferenceCandidate
-internal data class CallableReferenceCandidate(override val element: KtCallableReferenceExpression) : ReferenceCandidate
-internal data class OperatorCandidate(override val element: KtResolvableCall) : ReferenceCandidate
+internal data class AnnotationCandidate(
+    override val element: KtAnnotationEntry,
+) : ReferenceCandidate
+
+internal data class PropertyCandidate(
+    override val element: PsiElement,
+) : ReferenceCandidate
+
+internal data class CallableReferenceCandidate(
+    override val element: KtCallableReferenceExpression,
+) : ReferenceCandidate
+
+internal data class OperatorCandidate(
+    override val element: KtResolvableCall,
+) : ReferenceCandidate
 
 /**
  * Java candidates; resolution uses Java PSI `resolve()` entry points instead of the Kotlin
@@ -66,25 +83,42 @@ internal data class OperatorCandidate(override val element: KtResolvableCall) : 
  */
 internal sealed interface JavaCandidate : ReferenceCandidate
 
-internal data class JavaCallCandidate(override val element: PsiElement) : JavaCandidate
+internal data class JavaCallCandidate(
+    override val element: PsiElement,
+) : JavaCandidate
 
 internal sealed interface JavaTypeRefCandidate : JavaCandidate {
     override val element: PsiJavaCodeReferenceElement
     val kind: EdgeKind
 }
 
-internal data class JavaTypeCandidate(override val element: PsiJavaCodeReferenceElement) : JavaTypeRefCandidate {
+internal data class JavaTypeCandidate(
+    override val element: PsiJavaCodeReferenceElement,
+) : JavaTypeRefCandidate {
     override val kind: EdgeKind get() = EdgeKind.TYPE_REFERENCE
 }
 
-internal data class JavaInheritanceCandidate(override val element: PsiJavaCodeReferenceElement) : JavaTypeRefCandidate {
+internal data class JavaInheritanceCandidate(
+    override val element: PsiJavaCodeReferenceElement,
+) : JavaTypeRefCandidate {
     override val kind: EdgeKind get() = EdgeKind.INHERITANCE
 }
 
-internal data class JavaAnnotationCandidate(override val element: PsiAnnotation) : JavaCandidate
-internal data class JavaPropertyCandidate(override val element: PsiReferenceExpression) : JavaCandidate
-internal data class JavaMethodRefCandidate(override val element: PsiMethodReferenceExpression) : JavaCandidate
-internal data class JavaLambdaCandidate(override val element: PsiLambdaExpression) : JavaCandidate
+internal data class JavaAnnotationCandidate(
+    override val element: PsiAnnotation,
+) : JavaCandidate
+
+internal data class JavaPropertyCandidate(
+    override val element: PsiReferenceExpression,
+) : JavaCandidate
+
+internal data class JavaMethodRefCandidate(
+    override val element: PsiMethodReferenceExpression,
+) : JavaCandidate
+
+internal data class JavaLambdaCandidate(
+    override val element: PsiLambdaExpression,
+) : JavaCandidate
 
 /**
  * Enumerates PSI locations that may represent dependencies. Resolution is deliberately kept out
@@ -94,117 +128,138 @@ internal data class JavaLambdaCandidate(override val element: PsiLambdaExpressio
 internal object ReferenceCollector {
     fun collect(file: KtFile): List<ReferenceCandidate> {
         val result = mutableListOf<ReferenceCandidate>()
-        file.accept(object : KtTreeVisitorVoid() {
-            override fun visitUserType(type: KtUserType) {
-                if (shouldCollectType(type)) result += TypeReferenceCandidate(type)
-                super.visitUserType(type)
-            }
-
-            override fun visitSuperTypeListEntry(superTypeListEntry: KtSuperTypeListEntry) {
-                result += InheritanceCandidate(superTypeListEntry)
-                super.visitSuperTypeListEntry(superTypeListEntry)
-            }
-
-            override fun visitCallExpression(expression: KtCallExpression) {
-                // The call expression of an annotation is represented by ANNOTATION.
-                if (expression.parent !is KtAnnotationEntry) {
-                    result += CallCandidate(expression)
+        file.accept(
+            object : KtTreeVisitorVoid() {
+                override fun visitUserType(type: KtUserType) {
+                    if (shouldCollectType(type)) result += TypeReferenceCandidate(type)
+                    super.visitUserType(type)
                 }
-                super.visitCallExpression(expression)
-            }
 
-            override fun visitAnnotationEntry(annotationEntry: KtAnnotationEntry) {
-                result += AnnotationCandidate(annotationEntry)
-                super.visitAnnotationEntry(annotationEntry)
-            }
+                override fun visitSuperTypeListEntry(superTypeListEntry: KtSuperTypeListEntry) {
+                    result += InheritanceCandidate(superTypeListEntry)
+                    super.visitSuperTypeListEntry(superTypeListEntry)
+                }
 
-            override fun visitQualifiedExpression(expression: KtQualifiedExpression) {
-                if (shouldCollectQualified(expression)) result += PropertyCandidate(expression)
-                super.visitQualifiedExpression(expression)
-            }
-
-            override fun visitCallableReferenceExpression(expression: KtCallableReferenceExpression) {
-                result += CallableReferenceCandidate(expression)
-                super.visitCallableReferenceExpression(expression)
-            }
-
-            override fun visitArrayAccessExpression(expression: KtArrayAccessExpression) {
-                result += OperatorCandidate(expression)
-                super.visitArrayAccessExpression(expression)
-            }
-
-            // `by Delegate()` resolves to implicit getValue/setValue operator calls; the delegate
-            // expression itself is still collected as a normal call below.
-            override fun visitPropertyDelegate(propertyDelegate: KtPropertyDelegate) {
-                result += OperatorCandidate(propertyDelegate)
-                super.visitPropertyDelegate(propertyDelegate)
-            }
-
-            // `for (x in expr)` resolves to implicit iterator/hasNext/next operator calls.
-            override fun visitForExpression(forExpression: KtForExpression) {
-                result += OperatorCandidate(forExpression)
-                super.visitForExpression(forExpression)
-            }
-
-            // `val (a, b) = pair` resolves each entry to an implicit componentN operator call.
-            override fun visitDestructuringDeclarationEntry(entry: KtDestructuringDeclarationEntry) {
-                result += OperatorCandidate(entry)
-                super.visitDestructuringDeclarationEntry(entry)
-            }
-
-            override fun visitReferenceExpression(expression: KtReferenceExpression) {
-                when (expression) {
-                    is KtOperationReferenceExpression ->
-                        if (expression.text !in NON_CALLABLE_OPERATORS) {
-                            result += OperatorCandidate(expression)
-                        }
-                    is KtNameReferenceExpression -> if (shouldCollectName(expression)) {
-                        result += PropertyCandidate(expression)
+                override fun visitCallExpression(expression: KtCallExpression) {
+                    // The call expression of an annotation is represented by ANNOTATION.
+                    if (expression.parent !is KtAnnotationEntry) {
+                        result += CallCandidate(expression)
                     }
+                    super.visitCallExpression(expression)
                 }
-                super.visitReferenceExpression(expression)
-            }
-        })
+
+                override fun visitAnnotationEntry(annotationEntry: KtAnnotationEntry) {
+                    result += AnnotationCandidate(annotationEntry)
+                    super.visitAnnotationEntry(annotationEntry)
+                }
+
+                override fun visitQualifiedExpression(expression: KtQualifiedExpression) {
+                    if (shouldCollectQualified(expression)) result += PropertyCandidate(expression)
+                    super.visitQualifiedExpression(expression)
+                }
+
+                override fun visitCallableReferenceExpression(expression: KtCallableReferenceExpression) {
+                    result += CallableReferenceCandidate(expression)
+                    super.visitCallableReferenceExpression(expression)
+                }
+
+                override fun visitArrayAccessExpression(expression: KtArrayAccessExpression) {
+                    result += OperatorCandidate(expression)
+                    super.visitArrayAccessExpression(expression)
+                }
+
+                // `by Delegate()` resolves to implicit getValue/setValue operator calls; the delegate
+                // expression itself is still collected as a normal call below.
+                override fun visitPropertyDelegate(propertyDelegate: KtPropertyDelegate) {
+                    result += OperatorCandidate(propertyDelegate)
+                    super.visitPropertyDelegate(propertyDelegate)
+                }
+
+                // `for (x in expr)` resolves to implicit iterator/hasNext/next operator calls.
+                override fun visitForExpression(forExpression: KtForExpression) {
+                    result += OperatorCandidate(forExpression)
+                    super.visitForExpression(forExpression)
+                }
+
+                // `val (a, b) = pair` resolves each entry to an implicit componentN operator call.
+                override fun visitDestructuringDeclarationEntry(entry: KtDestructuringDeclarationEntry) {
+                    result += OperatorCandidate(entry)
+                    super.visitDestructuringDeclarationEntry(entry)
+                }
+
+                override fun visitReferenceExpression(expression: KtReferenceExpression) {
+                    when (expression) {
+                        is KtOperationReferenceExpression -> {
+                            if (expression.text !in NON_CALLABLE_OPERATORS) {
+                                result += OperatorCandidate(expression)
+                            }
+                        }
+
+                        is KtNameReferenceExpression -> {
+                            if (shouldCollectName(expression)) {
+                                result += PropertyCandidate(expression)
+                            }
+                        }
+                    }
+                    super.visitReferenceExpression(expression)
+                }
+            },
+        )
         return result
     }
 
     // These operators have no callable symbol to resolve.
     private val NON_CALLABLE_OPERATORS = setOf("is", "!is", "as", "as?", "&&", "||", "?:", "!!")
 
-    private fun shouldCollectType(type: KtUserType): Boolean {
-        // Only the outermost user type of a qualified name; resolving every segment would turn
-        // package qualifiers into spurious edges.
-        if (type.parent is KtUserType) return false
-        if (type.getStrictParentOfType<KtImportDirective>() != null) return false
+    private fun shouldCollectType(type: KtUserType): Boolean =
+        when {
+            // Only the outermost user type of a qualified name; resolving every segment
+            // would turn package qualifiers into spurious edges.
+            type.parent is KtUserType -> false
 
-        val typeReference = type.getStrictParentOfType<KtTypeReference>()
-        // The head type of a supertype is represented by INHERITANCE instead.
-        if (typeReference?.parent is KtSuperTypeListEntry) return false
-        // An annotation entry is represented by ANNOTATION instead.
-        if (type.getStrictParentOfType<KtAnnotationEntry>() != null) return false
-        return true
-    }
+            type.getStrictParentOfType<KtImportDirective>() != null -> false
 
-    private fun shouldCollectName(name: KtNameReferenceExpression): Boolean {
-        val parent = name.parent
-        if (parent is KtUserType || parent is KtImportDirective) return false
-        if (parent is KtCallExpression && parent.calleeExpression === name) return false
-        if (parent is KtQualifiedExpression && parent.selectorExpression === name) return false
-        if (parent is KtCallableReferenceExpression) return false
-        if (parent is KtAnnotationEntry) return false
-        if (parent is KtLabelReferenceExpression) return false
-        if (parent is KtValueArgument && parent.getArgumentName()?.referenceExpression === name) return false
-        if (name.getStrictParentOfType<KtImportDirective>() != null) return false
-        if (name.getReferencedName() == "this" || name.getReferencedName() == "super") return false
-        return true
-    }
+            // The head type of a supertype is represented by INHERITANCE instead.
+            type.getStrictParentOfType<KtTypeReference>()?.parent is KtSuperTypeListEntry -> false
+
+            // An annotation entry is represented by ANNOTATION instead.
+            type.getStrictParentOfType<KtAnnotationEntry>() != null -> false
+
+            else -> true
+        }
+
+    private fun shouldCollectName(name: KtNameReferenceExpression): Boolean =
+        !isNameCoveredElsewhere(name, name.parent) &&
+            name.getStrictParentOfType<KtImportDirective>() == null &&
+            name.getReferencedName() != "this" &&
+            name.getReferencedName() != "super"
+
+    private fun isNameCoveredElsewhere(
+        name: KtNameReferenceExpression,
+        parent: PsiElement?,
+    ): Boolean =
+        when {
+            parent is KtUserType || parent is KtImportDirective -> true
+            parent is KtCallExpression && parent.calleeExpression === name -> true
+            parent is KtQualifiedExpression && parent.selectorExpression === name -> true
+            parent is KtCallableReferenceExpression -> true
+            parent is KtAnnotationEntry -> true
+            parent is KtLabelReferenceExpression -> true
+            parent is KtValueArgument && parent.getArgumentName()?.referenceExpression === name -> true
+            else -> false
+        }
 
     private fun shouldCollectQualified(expression: KtQualifiedExpression): Boolean {
-        // `x.foo()` is already represented by CallCandidate.
-        if (expression.selectorExpression is KtCallExpression) return false
         val parent = expression.parent
-        if (parent is KtCallExpression && parent.calleeExpression === expression) return false
-        if (expression.getStrictParentOfType<KtImportDirective>() != null) return false
-        return true
+        return when {
+            // `x.foo()` is already represented by CallCandidate.
+            expression.selectorExpression is KtCallExpression -> false
+
+            parent is KtCallExpression && parent.calleeExpression === expression -> false
+
+            expression.getStrictParentOfType<KtImportDirective>() != null -> false
+
+            else -> true
+        }
     }
 }

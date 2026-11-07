@@ -27,7 +27,12 @@ class KlassTreePluginTest {
     @Test
     fun `rejects application to a non-root project`() {
         val root = ProjectBuilder.builder().build()
-        val child = ProjectBuilder.builder().withParent(root).withName("child").build()
+        val child =
+            ProjectBuilder
+                .builder()
+                .withParent(root)
+                .withName("child")
+                .build()
 
         assertFailsWith<GradleException> {
             child.pluginManager.apply(KlassTreePlugin::class.java)

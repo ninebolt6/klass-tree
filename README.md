@@ -254,4 +254,6 @@ analyzes two modules (`api` depends on `shared`).
 ```shell
 ./gradlew build          # compile, test, and check all modules
 ./gradlew :klass-tree-analyzer:test # analyzer integration test
+./gradlew ktlintFormat   # auto-format all sources
+./gradlew detekt ktlintCheck # run the linters without reformatting
 ```

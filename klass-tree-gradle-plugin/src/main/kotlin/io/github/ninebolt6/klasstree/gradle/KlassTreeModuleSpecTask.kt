@@ -15,7 +15,6 @@ import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
-import java.io.File
 
 abstract class KlassTreeModuleSpecTask : DefaultTask() {
     @get:Input
@@ -49,34 +48,36 @@ abstract class KlassTreeModuleSpecTask : DefaultTask() {
 
     @TaskAction
     fun writeModuleSpec() {
-        val sourceRoots = sourceDirectories.files
-            .filter { it.isDirectory }
-            .filter { directory ->
-                directory.walkTopDown().any { it.isFile && (it.extension == "kt" || it.extension == "java") }
+        val sourceRoots =
+            sourceDirectories.files
+                .filter { it.isDirectory }
+                .filter { directory ->
+                    directory.walkTopDown().any { it.isFile && (it.extension == "kt" || it.extension == "java") }
+                }.map { it.canonicalFile }
+                .distinct()
+                .sortedBy { it.absolutePath }
+                .map { it.absolutePath }
+        val candidates =
+            if (sourceRoots.isEmpty()) {
+                emptyList()
+            } else {
+                listOf(
+                    AnalysisModuleCandidate(
+                        projectPath = projectPath.get(),
+                        sourceSetName = sourceSetName.get(),
+                        moduleId = moduleId.get(),
+                        moduleName = moduleName.get(),
+                        sourceRoots = sourceRoots,
+                        classpath =
+                            classpath.files
+                                .filter { it.exists() }
+                                .map { it.absolutePath }
+                                .distinct(),
+                        projectDependencyPaths = projectDependencyPaths.get().sorted(),
+                        associatedModuleIds = associatedModuleIds.get().sorted(),
+                    ),
+                )
             }
-            .map { it.canonicalFile }
-            .distinct()
-            .sortedBy { it.absolutePath }
-            .map { it.absolutePath }
-        val candidates = if (sourceRoots.isEmpty()) {
-            emptyList()
-        } else {
-            listOf(
-                AnalysisModuleCandidate(
-                    projectPath = projectPath.get(),
-                    sourceSetName = sourceSetName.get(),
-                    moduleId = moduleId.get(),
-                    moduleName = moduleName.get(),
-                    sourceRoots = sourceRoots,
-                    classpath = classpath.files
-                        .filter { it.exists() }
-                        .map { it.absolutePath }
-                        .distinct(),
-                    projectDependencyPaths = projectDependencyPaths.get().sorted(),
-                    associatedModuleIds = associatedModuleIds.get().sorted(),
-                ),
-            )
-        }
         val output = outputFile.get().asFile
         output.parentFile.mkdirs()
         output.writeText(KlassTreeJson.encodeToString(ListSerializer(AnalysisModuleCandidate.serializer()), candidates))

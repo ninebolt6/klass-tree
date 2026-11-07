@@ -9,13 +9,14 @@ internal class MutableResolutionStats {
     var selfEdgesSkipped: Int = 0
     val analysisErrors = mutableListOf<String>()
 
-    fun toImmutable(): ResolutionStats = ResolutionStats(
-        candidates = candidates,
-        resolvedSource = resolvedSource,
-        resolvedExternal = resolvedExternal,
-        unresolved = unresolved,
-        skipped = skipped,
-        selfEdgesSkipped = selfEdgesSkipped,
-        analysisErrors = analysisErrors.toList(),
-    )
+    fun toImmutable(): ResolutionStats =
+        ResolutionStats(
+            candidates = candidates,
+            resolvedSource = resolvedSource,
+            resolvedExternal = resolvedExternal,
+            unresolved = unresolved,
+            skipped = skipped,
+            selfEdgesSkipped = selfEdgesSkipped,
+            analysisErrors = analysisErrors.toList(),
+        )
 }

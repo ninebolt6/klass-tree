@@ -1,7 +1,5 @@
 package io.github.ninebolt6.klasstree.gradle
 
-import java.nio.file.Files
-import java.nio.file.Path
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -10,6 +8,8 @@ import org.gradle.testkit.runner.GradleRunner
 import org.gradle.testkit.runner.TaskOutcome
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -59,17 +59,30 @@ class KlassTreeFunctionalTest {
 
         runner("klassTree").build()
 
-        val spec = Json.parseToJsonElement(
-            projectDir.resolve("build/klass-tree/analysis-spec.json").toFile().readText(),
-        ).jsonObject
-        val testModule = spec.getValue("modules").jsonArray
-            .map { it.jsonObject }
-            .single { it.getValue("projectPath").jsonPrimitive.content == ":api" &&
-                it.getValue("sourceSetName").jsonPrimitive.content == "test" }
-        val classpath = testModule.getValue("classpath").jsonArray
-            .map { it.jsonPrimitive.content }
-        val dependencies = testModule.getValue("dependencies").jsonArray
-            .map { it.jsonPrimitive.content }
+        val spec =
+            Json
+                .parseToJsonElement(
+                    projectDir.resolve("build/klass-tree/analysis-spec.json").toFile().readText(),
+                ).jsonObject
+        val testModule =
+            spec
+                .getValue("modules")
+                .jsonArray
+                .map { it.jsonObject }
+                .single {
+                    it.getValue("projectPath").jsonPrimitive.content == ":api" &&
+                        it.getValue("sourceSetName").jsonPrimitive.content == "test"
+                }
+        val classpath =
+            testModule
+                .getValue("classpath")
+                .jsonArray
+                .map { it.jsonPrimitive.content }
+        val dependencies =
+            testModule
+                .getValue("dependencies")
+                .jsonArray
+                .map { it.jsonPrimitive.content }
 
         assertFalse(classpath.any { it.contains("/build/classes/") })
         assertTrue(":api:main" in dependencies)
@@ -95,8 +108,13 @@ class KlassTreeFunctionalTest {
         val second = runner("klassTree").build()
 
         assertTrue(second.task(":klassTree")?.outcome == TaskOutcome.SUCCESS)
-        assertTrue(projectDir.resolve("build/klass-tree/graph.json").toFile().readText()
-            .contains("\"fqName\": \"api.Extra\""))
+        assertTrue(
+            projectDir
+                .resolve("build/klass-tree/graph.json")
+                .toFile()
+                .readText()
+                .contains("\"fqName\": \"api.Extra\""),
+        )
     }
 
     @Test
@@ -104,19 +122,25 @@ class KlassTreeFunctionalTest {
         writeProject(rootIsKotlin = true)
 
         val result = runner("klassTree").build()
-        val graph = Json.parseToJsonElement(
-            projectDir.resolve("build/klass-tree/graph.json").toFile().readText(),
-        ).jsonObject
+        val graph =
+            Json
+                .parseToJsonElement(
+                    projectDir.resolve("build/klass-tree/graph.json").toFile().readText(),
+                ).jsonObject
         val nodes = graph.getValue("nodes").jsonArray.map { it.jsonObject }
         val edges = graph.getValue("edges").jsonArray.map { it.jsonObject }
         val rootNodes = nodes.filter { it.getValue("module").jsonPrimitive.content == "root" }
 
         assertNotNull(result.task(":klassTree"))
         assertTrue(rootNodes.isNotEmpty())
+        val rootNodeIds = rootNodes.map { it.getValue("id").jsonPrimitive.content }
         assertTrue(
             edges.any { edge ->
-                edge.getValue("from").jsonPrimitive.content in rootNodes.map { it.getValue("id").jsonPrimitive.content } &&
-                    edge.getValue("to").jsonPrimitive.content.startsWith(":shared:main:")
+                edge.getValue("from").jsonPrimitive.content in rootNodeIds &&
+                    edge
+                        .getValue("to")
+                        .jsonPrimitive.content
+                        .startsWith(":shared:main:")
             },
         )
     }
@@ -202,15 +226,33 @@ class KlassTreeFunctionalTest {
         writeProject()
 
         val result = runner("klassTree", "--info").build()
-        val command = result.output.lineSequence()
-            .first { it.contains("AnalyzerMainKt") && it.contains(" -cp ") }
-        val classpath = command.substringAfter(" -cp ")
-            .substringBefore(" io.github.ninebolt6.klasstree.analyzer.AnalyzerMainKt")
-            .split(java.io.File.pathSeparator)
+        val command =
+            result.output
+                .lineSequence()
+                .first { it.contains("AnalyzerMainKt") && it.contains(" -cp ") }
+        val classpath =
+            command
+                .substringAfter(" -cp ")
+                .substringBefore(" io.github.ninebolt6.klasstree.analyzer.AnalyzerMainKt")
+                .split(java.io.File.pathSeparator)
 
         assertTrue(classpath.isNotEmpty())
-        assertTrue(classpath.none { java.io.File(it).name.startsWith("gradle-") })
-        assertTrue(classpath.none { java.io.File(it).name.startsWith("kotlin-compiler-embeddable") })
+        assertTrue(
+            classpath.none {
+                java.io
+                    .File(it)
+                    .name
+                    .startsWith("gradle-")
+            },
+        )
+        assertTrue(
+            classpath.none {
+                java.io
+                    .File(it)
+                    .name
+                    .startsWith("kotlin-compiler-embeddable")
+            },
+        )
         assertTrue(classpath.any { it.contains("analyzer") })
         assertTrue(classpath.any { it.contains("graph-dot") })
     }
@@ -231,9 +273,11 @@ class KlassTreeFunctionalTest {
 
         runner("klassTree").build()
 
-        val graph = Json.parseToJsonElement(
-            projectDir.resolve("build/klass-tree/graph.json").toFile().readText(),
-        ).jsonObject
+        val graph =
+            Json
+                .parseToJsonElement(
+                    projectDir.resolve("build/klass-tree/graph.json").toFile().readText(),
+                ).jsonObject
         val nodes = graph.getValue("nodes").jsonArray.map { it.jsonObject }
         assertTrue(
             nodes.any { it.getValue("fqName").jsonPrimitive.content == "shared.JavaHelper" },
@@ -268,29 +312,39 @@ class KlassTreeFunctionalTest {
                 include("shared", "api")
             """,
         )
+        writeBuildFiles(includeTests, invalidDependency, rootIsKotlin, klassTreeConfig)
+        if (withSources) writeSources(rootIsKotlin)
+    }
+
+    private fun writeBuildFiles(
+        includeTests: Boolean,
+        invalidDependency: Boolean,
+        rootIsKotlin: Boolean,
+        klassTreeConfig: String,
+    ) {
         write(
             "build.gradle.kts",
             buildString {
                 appendLine(
                     """
-                        plugins {
-                            id("org.jetbrains.kotlin.jvm")${if (rootIsKotlin) "" else " apply false"}
-                            id("io.github.ninebolt6.klass-tree")
-                        }
+                    plugins {
+                        id("org.jetbrains.kotlin.jvm")${if (rootIsKotlin) "" else " apply false"}
+                        id("io.github.ninebolt6.klass-tree")
+                    }
 
-                        klassTree {
-                            includeTests.set($includeTests)
-                            outputDirectory.set(layout.buildDirectory.dir("klass-tree"))
-                            $klassTreeConfig
-                        }
+                    klassTree {
+                        includeTests.set($includeTests)
+                        outputDirectory.set(layout.buildDirectory.dir("klass-tree"))
+                        $klassTreeConfig
+                    }
                     """.trimIndent(),
                 )
                 if (rootIsKotlin) {
                     appendLine(
                         """
-                            dependencies {
-                                implementation(project(":shared"))
-                            }
+                        dependencies {
+                            implementation(project(":shared"))
+                        }
                         """.trimIndent(),
                     )
                 }
@@ -309,12 +363,12 @@ class KlassTreeFunctionalTest {
             buildString {
                 appendLine(
                     """
-                        plugins {
-                            id("org.jetbrains.kotlin.jvm")
-                        }
+                    plugins {
+                        id("org.jetbrains.kotlin.jvm")
+                    }
 
-                        dependencies {
-                            implementation(project(":shared"))
+                    dependencies {
+                        implementation(project(":shared"))
                     """.trimIndent(),
                 )
                 if (invalidDependency) {
@@ -323,7 +377,9 @@ class KlassTreeFunctionalTest {
                 appendLine("}")
             },
         )
-        if (!withSources) return
+    }
+
+    private fun writeSources(rootIsKotlin: Boolean) {
         write(
             "shared/src/main/kotlin/shared/Shared.kt",
             """
@@ -505,14 +561,18 @@ class KlassTreeFunctionalTest {
         assertTrue(result.output.contains("no baseline graph"))
     }
 
-    private fun write(relativePath: String, content: String) {
+    private fun write(
+        relativePath: String,
+        content: String,
+    ) {
         val file = projectDir.resolve(relativePath)
         Files.createDirectories(file.parent)
         Files.writeString(file, content.trimIndent())
     }
 
     private fun runner(vararg arguments: String): GradleRunner =
-        GradleRunner.create()
+        GradleRunner
+            .create()
             .withProjectDir(projectDir.toFile())
             .withPluginClasspath()
             .withArguments(*arguments, "--stacktrace", "--console=plain")

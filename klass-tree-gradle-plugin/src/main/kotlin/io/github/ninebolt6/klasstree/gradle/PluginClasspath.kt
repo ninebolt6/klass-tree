@@ -14,17 +14,18 @@ internal object PluginClasspath {
         val loader = KlassTreePlugin::class.java.classLoader
         val files = LinkedHashSet<File>()
 
-        val representativeClasses = listOfNotNull(
-            io.github.ninebolt6.klasstree.graph.AnalysisSpec::class.java,
-            kotlinx.serialization.json.Json::class.java,
-            kotlinx.serialization.KSerializer::class.java,
-            runCatching {
-                Class.forName("io.github.ninebolt6.klasstree.analyzer.AnalyzerMainKt", false, loader)
-            }.getOrNull(),
-            runCatching {
-                Class.forName("io.github.ninebolt6.klasstree.graph.dot.DotExporter", false, loader)
-            }.getOrNull(),
-        )
+        val representativeClasses =
+            listOfNotNull(
+                io.github.ninebolt6.klasstree.graph.AnalysisSpec::class.java,
+                kotlinx.serialization.json.Json::class.java,
+                kotlinx.serialization.KSerializer::class.java,
+                runCatching {
+                    Class.forName("io.github.ninebolt6.klasstree.analyzer.AnalyzerMainKt", false, loader)
+                }.getOrNull(),
+                runCatching {
+                    Class.forName("io.github.ninebolt6.klasstree.graph.dot.DotExporter", false, loader)
+                }.getOrNull(),
+            )
         representativeClasses.forEach { type ->
             type.protectionDomain?.codeSource?.location?.let { location ->
                 try {

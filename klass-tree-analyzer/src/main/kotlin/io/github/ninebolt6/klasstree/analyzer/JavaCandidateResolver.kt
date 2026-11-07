@@ -24,17 +24,12 @@ internal class JavaCandidateResolver(
 
     fun resolve(candidate: JavaCandidate) {
         when (candidate) {
-            is JavaCallCandidate -> resolveCall(candidate.element)
+            is JavaCallCandidate -> {
+                resolveCall(candidate.element)
+            }
 
             is JavaTypeRefCandidate -> {
-                when (val resolved = candidate.element.resolve()) {
-                    is PsiClass -> handleResolved(
-                        resolved, candidate.element, candidate.kind,
-                    )
-
-                    null -> stats.unresolved++
-                    else -> stats.skipped++
-                }
+                resolveTypeRef(candidate)
             }
 
             is JavaAnnotationCandidate -> {
@@ -46,41 +41,16 @@ internal class JavaCandidateResolver(
             }
 
             is JavaPropertyCandidate -> {
-                when (val resolved = candidate.element.resolve()) {
-                    is PsiField -> handleResolved(
-                        resolved.containingClass,
-                        candidate.element,
-                        EdgeKind.PROPERTY_ACCESS,
-                    )
-
-                    is PsiClass -> handleResolved(
-                        resolved,
-                        candidate.element,
-                        EdgeKind.TYPE_REFERENCE,
-                    )
-
-                    else -> stats.skipped++
-                }
+                resolveProperty(candidate)
             }
 
             is JavaMethodRefCandidate -> {
-                val method = candidate.element.resolve() as? PsiMethod
-                if (method == null) {
-                    stats.unresolved++
-                    return
-                }
-                handleResolved(
-                    method.containingClass,
-                    candidate.element,
-                    EdgeKind.CALLABLE_REFERENCE,
-                )
+                resolveMethodRef(candidate)
             }
 
             is JavaLambdaCandidate -> {
-                val resolved =
-                    (candidate.element.functionalInterfaceType as? PsiClassType)?.resolve()
                 handleResolved(
-                    resolved,
+                    (candidate.element.functionalInterfaceType as? PsiClassType)?.resolve(),
                     candidate.element,
                     EdgeKind.OPERATOR_OR_SYNTHETIC_CALL,
                 )
@@ -88,70 +58,131 @@ internal class JavaCandidateResolver(
         }
     }
 
-    private fun resolveCall(element: PsiElement) {
-        when (element) {
-            is PsiNewExpression -> {
-                // `new Foo(){}` keeps the referenced class on the anonymous class, and
-                // implicit default constructors never resolve through resolveMethod();
-                // the declared class reference is the edge target either way.
-                val ref = element.anonymousClass?.baseClassReference ?: element.classReference
-                val resolved = ref?.resolve() as? PsiClass
-                if (resolved == null) {
-                    stats.unresolved++
-                    return
-                }
+    private fun resolveTypeRef(candidate: JavaTypeRefCandidate) {
+        when (val resolved = candidate.element.resolve()) {
+            is PsiClass -> {
                 handleResolved(
                     resolved,
-                    element,
-                    EdgeKind.CONSTRUCTOR_CALL,
+                    candidate.element,
+                    candidate.kind,
                 )
             }
 
-            is PsiMethodCallExpression -> {
-                val refName = element.methodExpression.referenceName
-                if (refName == "super" || refName == "this") {
-                    // resolveMethod() on constructor chains goes through Cls mirror
-                    // services that a standalone session does not have; resolve the
-                    // superclass structurally instead.
-                    val chained = chainedConstructorTarget(element)
-                    if (chained == null) {
-                        stats.skipped++
-                        return
-                    }
-                    handleResolved(
-                        chained,
-                        element,
-                        EdgeKind.CONSTRUCTOR_CALL,
-                    )
-                    return
-                }
-                val method = element.resolveMethod()
-                // Record accessors and other methods this session cannot resolve still
-                // name their receiver type; the graph only needs the owning class.
-                val target = method?.containingClass ?: qualifierReceiverClass(element)
-                if (target == null) {
-                    if (method == null) stats.unresolved++ else stats.skipped++
-                    return
-                }
-                val kind = if (method?.isConstructor == true) {
-                    EdgeKind.CONSTRUCTOR_CALL
-                } else {
-                    EdgeKind.FUNCTION_CALL
-                }
+            null -> {
+                stats.unresolved++
+            }
+
+            else -> {
+                stats.skipped++
+            }
+        }
+    }
+
+    private fun resolveProperty(candidate: JavaPropertyCandidate) {
+        when (val resolved = candidate.element.resolve()) {
+            is PsiField -> {
                 handleResolved(
-                    target,
-                    element,
-                    kind,
+                    resolved.containingClass,
+                    candidate.element,
+                    EdgeKind.PROPERTY_ACCESS,
                 )
             }
 
+            is PsiClass -> {
+                handleResolved(
+                    resolved,
+                    candidate.element,
+                    EdgeKind.TYPE_REFERENCE,
+                )
+            }
+
+            else -> {
+                stats.skipped++
+            }
+        }
+    }
+
+    private fun resolveMethodRef(candidate: JavaMethodRefCandidate) {
+        val method = candidate.element.resolve() as? PsiMethod
+        if (method == null) {
+            stats.unresolved++
+        } else {
+            handleResolved(
+                method.containingClass,
+                candidate.element,
+                EdgeKind.CALLABLE_REFERENCE,
+            )
+        }
+    }
+
+    private fun resolveCall(element: PsiElement) {
+        when (element) {
+            is PsiNewExpression -> resolveNewExpression(element)
+            is PsiMethodCallExpression -> resolveMethodCall(element)
             else -> stats.skipped++
         }
     }
 
+    private fun resolveNewExpression(element: PsiNewExpression) {
+        // `new Foo(){}` keeps the referenced class on the anonymous class, and
+        // implicit default constructors never resolve through resolveMethod();
+        // the declared class reference is the edge target either way.
+        val ref = element.anonymousClass?.baseClassReference ?: element.classReference
+        val resolved = ref?.resolve() as? PsiClass
+        if (resolved == null) {
+            stats.unresolved++
+        } else {
+            handleResolved(
+                resolved,
+                element,
+                EdgeKind.CONSTRUCTOR_CALL,
+            )
+        }
+    }
+
+    private fun resolveMethodCall(element: PsiMethodCallExpression) {
+        val refName = element.methodExpression.referenceName
+        if (refName == "super" || refName == "this") {
+            // resolveMethod() on constructor chains goes through Cls mirror
+            // services that a standalone session does not have; resolve the
+            // superclass structurally instead.
+            val chained = chainedConstructorTarget(element)
+            if (chained == null) {
+                stats.skipped++
+            } else {
+                handleResolved(
+                    chained,
+                    element,
+                    EdgeKind.CONSTRUCTOR_CALL,
+                )
+            }
+            return
+        }
+        val method = element.resolveMethod()
+        // Record accessors and other methods this session cannot resolve still
+        // name their receiver type; the graph only needs the owning class.
+        val target = method?.containingClass ?: qualifierReceiverClass(element)
+        if (target == null) {
+            if (method == null) stats.unresolved++ else stats.skipped++
+            return
+        }
+        val kind =
+            if (method?.isConstructor == true) {
+                EdgeKind.CONSTRUCTOR_CALL
+            } else {
+                EdgeKind.FUNCTION_CALL
+            }
+        handleResolved(
+            target,
+            element,
+            kind,
+        )
+    }
+
     private fun qualifierReceiverClass(call: PsiMethodCallExpression): PsiClass? {
-        val qualifier = call.methodExpression.qualifierExpression as? PsiReferenceExpression
-            ?: return null
+        val qualifier =
+            call.methodExpression.qualifierExpression as? PsiReferenceExpression
+                ?: return null
         return when (val resolved = qualifier.resolve()) {
             is PsiClass -> resolved
             is PsiVariable -> (resolved.type as? PsiClassType)?.resolve()
@@ -165,8 +196,16 @@ internal class JavaCandidateResolver(
     private fun chainedConstructorTarget(call: PsiMethodCallExpression): PsiClass? {
         val owner = PsiTreeUtil.getParentOfType(call, PsiClass::class.java) ?: return null
         return when (call.methodExpression.referenceName) {
-            "super" -> owner.extendsList?.referenceElements?.firstOrNull()?.resolve() as? PsiClass
-            else -> owner
+            "super" -> {
+                owner.extendsList
+                    ?.referenceElements
+                    ?.firstOrNull()
+                    ?.resolve() as? PsiClass
+            }
+
+            else -> {
+                owner
+            }
         }
     }
 
