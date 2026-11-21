@@ -106,25 +106,22 @@ Persist `<rootProject>/.gradle/klass-tree/aot/` in CI; otherwise leave caching o
 
 ## Checking dependency regressions
 
-`klassTreeCheck` compares `graph.json` with the committed baseline and fails when new references
-to `deniedTargets` appear. It always writes the full diff to `klass-tree-diff.json` next to the
-graph so CI can archive it.
+`klassTreeCheck` fails when an edge into `deniedTargets` gains call sites, including new edges.
+The portable baseline stores edge counts, not locations: line shifts do not matter.
+Count changes are written to `klass-tree-diff.json`; decreases are reported as progress.
 
 ```shell
-./gradlew klassTreeBaseline   # 1. freeze the current graph as the baseline; commit the file
+./gradlew klassTreeBaseline   # 1. record current counts; commit the baseline
 ./gradlew klassTreeCheck      # 2. run in CI from then on
 ```
 
-Violations list each new crossing with its call site:
+Violations show counts and current call sites:
 
 ```text
-klass-tree: 2 new reference(s) to denied targets [com.example.legacy]:
-    + com.example.api.Service -> com.example.legacy.GodClass CONSTRUCTOR_CALL @ api/Service.kt:14
+    + a.Main -> legacy.Old FUNCTION_CALL (1 -> 2 call sites) @ Main.kt:5, Main.kt:9
 ```
 
-Only references *absent from the baseline* count, so pre-existing dependencies never fail; removed
-references are reported as progress. This is the intended workflow for shrinking a monolithic
-module: declare the code being phased out as a denied target and let CI enforce the ratchet.
+Regenerate old graph-style baselines with `./gradlew klassTreeBaseline` and commit the result.
 
 ## What is analyzed
 
