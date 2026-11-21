@@ -8,11 +8,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.system.exitProcess
 
-/**
- * Entry point used by the Gradle plugin. The process is intentionally short-lived: Analysis API
- * Standalone installs IntelliJ platform services that are awkward to unload inside a Gradle
- * daemon, so the plugin forks this main class with an isolated classpath.
- */
+// Analysis API Standalone installs global IntelliJ services that cannot safely share the Gradle daemon.
 fun main(args: Array<String>) {
     if (args.size < 2) {
         System.err.println("Usage: klass-tree-analyzer <analysis-spec.json> <output-dir>")

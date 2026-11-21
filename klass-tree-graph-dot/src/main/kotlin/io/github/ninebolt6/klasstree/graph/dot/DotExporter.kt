@@ -103,7 +103,6 @@ object DotExporter {
             EdgeKind.OPERATOR_OR_SYNTHETIC_CALL -> "#6b7280"
         }
 
-    // Sanitized module names can collide (a-b and a_b both give cluster_a_b); suffix on repeat.
     private fun uniqueClusterId(
         module: String,
         used: MutableSet<String>,

@@ -19,10 +19,6 @@ import org.jetbrains.kotlin.psi.KtFile
 import java.nio.file.Path
 import java.time.Instant
 
-/**
- * This class is intentionally only referenced from the analyzer's own `main` (which the Gradle
- * plugin launches in a separate JVM). The Gradle daemon never loads Analysis API classes.
- */
 @OptIn(KaExperimentalApi::class)
 class Analyzer {
     fun analyze(
@@ -37,10 +33,7 @@ class Analyzer {
         try {
             val session = buildAnalysisSession(spec, disposable)
 
-            // Enumerating PSI files, indexing declarations, collecting candidates, and resolving
-            // them all happen under one read action. Besides satisfying the platform's read-access
-            // requirement, this avoids acquiring a read action once per file, which is measurable
-            // on modules with thousands of files.
+            // IntelliJ PSI access requires a read action.
             return ApplicationManager.getApplication().runReadAction(
                 Computable<AnalysisResult> {
                     val fileInfos = collectFileInfos(session, spec)
@@ -121,7 +114,6 @@ class Analyzer {
                 else -> null
             }
         val absolutePath = file?.virtualFile?.path?.let { Path.of(it).toAbsolutePath().normalize() }
-        // Overlapping (non-identical) source roots can still list the same file.
         if (file == null || absolutePath == null || !claimed.add(absolutePath)) return null
         return SourceFileInfo(
             module = moduleSpec,
@@ -136,8 +128,7 @@ class Analyzer {
         resolver: CandidateResolver,
     ) = isolateFileFailure(info, resolver.stats) {
         val stats = resolver.stats
-        // A syntactically broken file still yields a PSI tree; flag it instead of silently
-        // dropping whatever did not parse.
+        // PSI can return recoverable trees for syntactically invalid files.
         if (PsiTreeUtil.findChildOfType(info.file, PsiErrorElement::class.java) != null) {
             stats.analysisErrors += "${info.relativePath}: PSI parse errors"
         }
@@ -181,8 +172,6 @@ class Analyzer {
             }
     }
 
-    // Whole-file isolation covers ordinary exceptions plus StackOverflowErrors from deeply
-    // recursive PSI or FIR structures; other Errors such as OOM still abort the analysis.
     private fun isolateFileFailure(
         info: SourceFileInfo,
         stats: MutableResolutionStats,

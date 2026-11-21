@@ -46,7 +46,7 @@ class AnalyzerInteropTest {
     }
 
     @Test
-    fun `kotlin sees java members as calls and property accesses`() {
+    fun `kotlin resolves java constructors and public field accesses`() {
         val result =
             analyze(
                 module(

@@ -2,13 +2,7 @@ package io.github.ninebolt6.klasstree.gradle
 
 import java.io.File
 
-/**
- * Resolves the runtime code sources needed by the forked analyzer.
- *
- * Only the jars of a few known classes are used. Walking the plugin classloader hierarchy would pull
- * in the whole Gradle distribution, including its own Kotlin compiler and stdlib. Analysis API and
- * Kotlin stdlib are supplied separately by the `klassTreeAnalyzer` configuration.
- */
+// Gradle classloaders include compiler jars that conflict with the standalone analyzer.
 internal object PluginClasspath {
     fun resolve(): List<File> {
         val loader = KlassTreePlugin::class.java.classLoader
@@ -28,7 +22,6 @@ internal object PluginClasspath {
                 try {
                     files += File(location.toURI())
                 } catch (_: Exception) {
-                    // Ignore code sources that are not local files.
                 }
             }
         }

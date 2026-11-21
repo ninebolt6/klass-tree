@@ -1,10 +1,14 @@
 package io.github.ninebolt6.klasstree.gradle
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import org.gradle.testkit.runner.GradleRunner
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class KlassTreeRatchetFunctionalTest {
@@ -27,6 +31,11 @@ class KlassTreeRatchetFunctionalTest {
         writeProject()
         runner("klassTreeBaseline").build()
 
+        val content = projectDir.resolve("klass-tree-baseline.json").toFile().readText()
+        val baseline = Json.parseToJsonElement(content).jsonObject
+        assertEquals(setOf("schemaVersion", "edges"), baseline.keys)
+        assertTrue(baseline.getValue("edges").jsonArray.isNotEmpty())
+
         val shifted = source.replace("        value.touch()", "        // a comment\n        value.touch()")
         write("src/main/kotlin/a/Main.kt", shifted)
         runner("klassTreeCheck").build()
@@ -48,6 +57,7 @@ class KlassTreeRatchetFunctionalTest {
 
         write("src/main/kotlin/b/Main.kt", source.replace("package a", "package b"))
         runner("klassTreeCheck", "--configuration-cache").build()
+        assertTrue(projectDir.resolve("build/klass-tree/klass-tree-diff.json").toFile().isFile)
 
         write("src/main/kotlin/a/Main.kt", source.replace("value.touch()", "value.touch()\n        value.touch()"))
         val result = runner("klassTreeCheck", "--configuration-cache").buildAndFail()

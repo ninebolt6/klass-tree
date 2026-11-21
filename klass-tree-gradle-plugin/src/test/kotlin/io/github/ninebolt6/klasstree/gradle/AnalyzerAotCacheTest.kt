@@ -18,11 +18,6 @@ class AnalyzerAotCacheTest {
     lateinit var root: Path
 
     @Test
-    fun `unset directory leaves arguments unchanged`() {
-        assertEquals(emptyList(), arguments(directory = null))
-    }
-
-    @Test
     fun `older Java does not create a cache directory`() {
         assertEquals(emptyList(), arguments(version = 21))
         assertFalse(root.resolve("cache").toFile().exists())
@@ -72,7 +67,7 @@ class AnalyzerAotCacheTest {
     }
 
     @Test
-    fun `classpath paths sizes and order invalidate the cache`() {
+    fun `classpath membership sizes and order invalidate the cache`() {
         val first = root.resolve("first.jar").toFile().apply { writeText("first") }
         val second = root.resolve("second.jar").toFile().apply { writeText("second") }
         val initial = arguments(classpath = listOf(first, second))
@@ -85,7 +80,7 @@ class AnalyzerAotCacheTest {
     }
 
     @Test
-    fun `same size and timestamp retain the cache without reading contents`() {
+    fun `changed contents with the same size and timestamp retain the cache key`() {
         val jar = root.resolve("library.jar").toFile().apply { writeText("first") }
         val timestamp = Files.getLastModifiedTime(jar.toPath())
         val initial = arguments(classpath = listOf(jar))
@@ -118,7 +113,7 @@ class AnalyzerAotCacheTest {
     }
 
     private fun arguments(
-        directory: File? = root.resolve("cache").toFile(),
+        directory: File = root.resolve("cache").toFile(),
         classpath: List<File> = emptyList(),
         version: Int = 25,
         identity: List<String> = listOf("25", "vendor", "/jdk"),

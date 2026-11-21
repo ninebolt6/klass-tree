@@ -1,10 +1,5 @@
 package io.github.ninebolt6.klasstree.graph
 
-/**
- * Compares two [DependencyGraph] snapshots by node id, edge identity (from/to/kind) and call site.
- * Non-graph metadata such as `generatedAt` is ignored so the result only reflects source changes.
- * All output lists are sorted to keep serialized diffs stable.
- */
 object GraphDiffer {
     fun diff(
         baseline: DependencyGraph,

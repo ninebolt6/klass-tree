@@ -6,10 +6,6 @@ private data class EdgeKey(
     val kind: EdgeKind,
 )
 
-/**
- * Accumulates nodes and edges, merging repeated dependencies of the same kind into one edge with
- * multiple call sites.
- */
 class GraphBuilder {
     private val nodes = LinkedHashMap<String, GraphNode>()
     private val edges = LinkedHashMap<EdgeKey, MutableSet<CallSite>>()

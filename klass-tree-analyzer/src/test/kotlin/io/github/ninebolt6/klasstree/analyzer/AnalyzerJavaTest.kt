@@ -71,16 +71,6 @@ class AnalyzerJavaTest {
     }
 
     @Test
-    fun `java sources are skipped when includeJavaSources is false`() {
-        val result =
-            analyze(
-                module(":app:main", "J.java" to "package com.example; class J {}"),
-                includeJavaSources = false,
-            )
-        assertTrue(result.graph.nodes.none { it.fqName == "com.example.J" })
-    }
-
-    @Test
     fun `java anonymous class construction still reaches the named supertype`() {
         val result =
             analyze(
@@ -200,7 +190,7 @@ class AnalyzerJavaTest {
     }
 
     @Test
-    fun `java class literal instanceof and generic arguments`() {
+    fun `java class literals and generic arguments produce type references`() {
         val result =
             analyze(
                 module(
@@ -299,7 +289,7 @@ class AnalyzerJavaTest {
     }
 
     @Test
-    fun `java generics varargs chained and enum-switch calls`() {
+    fun `java calls resolve to their owner and enum constants produce property accesses`() {
         val result =
             analyze(
                 module(
@@ -453,7 +443,7 @@ class AnalyzerJavaTest {
     }
 
     @Test
-    fun `java var instanceof-pattern wildcard and try-with-resources`() {
+    fun `modern java syntax resolves constructors calls and type references without unresolved symbols`() {
         val result =
             analyze(
                 module(

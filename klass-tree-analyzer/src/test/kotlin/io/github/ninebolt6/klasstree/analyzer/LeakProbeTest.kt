@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 
 class LeakProbeTest {
     @Test
-    fun `repeated analyze calls release the session`() {
+    fun `repeated analyze calls keep post-GC heap growth bounded`() {
         val root = Files.createTempDirectory("klass-tree-leak-probe")
         try {
             val spec = writeProbeSpec(root)

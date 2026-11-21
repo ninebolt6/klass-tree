@@ -11,11 +11,6 @@ import org.gradle.api.attributes.Usage
 import org.gradle.api.attributes.java.TargetJvmEnvironment
 import org.gradle.api.tasks.TaskProvider
 
-/**
- * Root-project plugin writing a source dependency graph for all Kotlin JVM subprojects. Applying
- * it to a non-root project is rejected because source set names and output paths would otherwise
- * be ambiguous.
- */
 class KlassTreePlugin : Plugin<Project> {
     override fun apply(project: Project) {
         if (project !== project.rootProject) {
@@ -139,8 +134,7 @@ class KlassTreePlugin : Plugin<Project> {
             checkTask.deniedDependencies.set(extension.deniedDependencies)
             checkTask.diffFile.set(extension.outputDirectory.file("klass-tree-diff.json"))
             checkTask.dependsOn(task)
-            // Ordering, not a dependency: regenerating the baseline must never become a
-            // prerequisite of checking it.
+            // Baseline generation must never become a prerequisite of checking the committed baseline.
             checkTask.mustRunAfter(baselineTask)
         }
 
@@ -193,8 +187,6 @@ class KlassTreePlugin : Plugin<Project> {
         }
 
         val sourceDirectories = projectScans.values.flatMap { it.sourceDirectories }
-        // Wiring module-spec task outputs through their providers also carries the task
-        // dependencies, so klassTree runs every producer task first.
         val moduleSpecOutputs =
             projectScans.values
                 .flatMap { it.moduleTasks }

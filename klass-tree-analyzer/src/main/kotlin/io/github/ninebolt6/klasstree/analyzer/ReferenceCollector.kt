@@ -34,10 +34,6 @@ internal sealed interface ReferenceCandidate {
     val element: PsiElement
 }
 
-/**
- * Kotlin candidates that resolve through the generic `KtResolvable` overload of
- * `resolveSuccessfulSymbol` with a fixed edge kind.
- */
 internal sealed interface KotlinSymbolCandidate : ReferenceCandidate {
     override val element: KtResolvable
     val kind: EdgeKind
@@ -59,8 +55,7 @@ internal data class CallCandidate(
     override val element: KtCallExpression,
 ) : ReferenceCandidate
 
-// Not a KotlinSymbolCandidate: it must resolve through the KtAnnotationEntry overload of
-// resolveSuccessfulSymbol, which returns the constructor symbol rather than the class symbol.
+// The annotation-specific resolveSuccessfulSymbol overload returns the constructor rather than the class.
 internal data class AnnotationCandidate(
     override val element: KtAnnotationEntry,
 ) : ReferenceCandidate
@@ -77,10 +72,6 @@ internal data class OperatorCandidate(
     override val element: KtResolvableCall,
 ) : ReferenceCandidate
 
-/**
- * Java candidates; resolution uses Java PSI `resolve()` entry points instead of the Kotlin
- * Analysis API, so they are delegated to [JavaCandidateResolver] as a group.
- */
 internal sealed interface JavaCandidate : ReferenceCandidate
 
 internal data class JavaCallCandidate(
@@ -120,11 +111,6 @@ internal data class JavaLambdaCandidate(
     override val element: PsiLambdaExpression,
 ) : JavaCandidate
 
-/**
- * Enumerates PSI locations that may represent dependencies. Resolution is deliberately kept out
- * of this visitor: all candidates are collected first, then resolved inside a single `analyze`
- * block per file.
- */
 internal object ReferenceCollector {
     fun collect(file: KtFile): List<ReferenceCandidate> {
         val result = mutableListOf<ReferenceCandidate>()
@@ -141,7 +127,6 @@ internal object ReferenceCollector {
                 }
 
                 override fun visitCallExpression(expression: KtCallExpression) {
-                    // The call expression of an annotation is represented by ANNOTATION.
                     if (expression.parent !is KtAnnotationEntry) {
                         result += CallCandidate(expression)
                     }
@@ -168,20 +153,16 @@ internal object ReferenceCollector {
                     super.visitArrayAccessExpression(expression)
                 }
 
-                // `by Delegate()` resolves to implicit getValue/setValue operator calls; the delegate
-                // expression itself is still collected as a normal call below.
                 override fun visitPropertyDelegate(propertyDelegate: KtPropertyDelegate) {
                     result += OperatorCandidate(propertyDelegate)
                     super.visitPropertyDelegate(propertyDelegate)
                 }
 
-                // `for (x in expr)` resolves to implicit iterator/hasNext/next operator calls.
                 override fun visitForExpression(forExpression: KtForExpression) {
                     result += OperatorCandidate(forExpression)
                     super.visitForExpression(forExpression)
                 }
 
-                // `val (a, b) = pair` resolves each entry to an implicit componentN operator call.
                 override fun visitDestructuringDeclarationEntry(entry: KtDestructuringDeclarationEntry) {
                     result += OperatorCandidate(entry)
                     super.visitDestructuringDeclarationEntry(entry)
@@ -208,23 +189,14 @@ internal object ReferenceCollector {
         return result
     }
 
-    // These operators have no callable symbol to resolve.
     private val NON_CALLABLE_OPERATORS = setOf("is", "!is", "as", "as?", "&&", "||", "?:", "!!")
 
     private fun shouldCollectType(type: KtUserType): Boolean =
         when {
-            // Only the outermost user type of a qualified name; resolving every segment
-            // would turn package qualifiers into spurious edges.
             type.parent is KtUserType -> false
-
             type.getStrictParentOfType<KtImportDirective>() != null -> false
-
-            // The head type of a supertype is represented by INHERITANCE instead.
             type.getStrictParentOfType<KtTypeReference>()?.parent is KtSuperTypeListEntry -> false
-
-            // An annotation entry is represented by ANNOTATION instead.
             type.getStrictParentOfType<KtAnnotationEntry>() != null -> false
-
             else -> true
         }
 
@@ -252,13 +224,9 @@ internal object ReferenceCollector {
     private fun shouldCollectQualified(expression: KtQualifiedExpression): Boolean {
         val parent = expression.parent
         return when {
-            // `x.foo()` is already represented by CallCandidate.
             expression.selectorExpression is KtCallExpression -> false
-
             parent is KtCallExpression && parent.calleeExpression === expression -> false
-
             expression.getStrictParentOfType<KtImportDirective>() != null -> false
-
             else -> true
         }
     }
