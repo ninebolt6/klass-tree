@@ -575,13 +575,5 @@ class KlassTreeFunctionalTest {
             .create()
             .withProjectDir(projectDir.toFile())
             .withPluginClasspath()
-            .withArguments(
-                buildList {
-                    addAll(arguments)
-                    if (arguments.none { it.startsWith("-Dorg.gradle.java.home=") }) {
-                        add("-Dorg.gradle.java.home=${System.getProperty("java.home")}")
-                    }
-                    addAll(listOf("--stacktrace", "--console=plain"))
-                },
-            )
+            .withArguments(*arguments, "--stacktrace", "--console=plain")
 }

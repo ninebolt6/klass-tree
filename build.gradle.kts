@@ -1,6 +1,3 @@
-import org.gradle.jvm.toolchain.JavaLanguageVersion
-import org.gradle.jvm.toolchain.JavaToolchainService
-
 plugins {
     alias(libs.plugins.kotlin.jvm) apply false
     alias(libs.plugins.kotlin.serialization) apply false
@@ -72,18 +69,6 @@ subprojects {
         }
         tasks.withType<JavaCompile>().configureEach {
             options.release.set(21)
-        }
-        val testLauncher =
-            extensions.getByType<JavaToolchainService>().launcherFor {
-                languageVersion.set(
-                    providers
-                        .gradleProperty("testJavaVersion")
-                        .map { JavaLanguageVersion.of(it) }
-                        .orElse(JavaLanguageVersion.of(25)),
-                )
-            }
-        tasks.withType<Test>().configureEach {
-            javaLauncher.set(testLauncher)
         }
         tasks.named("check") {
             dependsOn(ktlintCheck)
