@@ -345,7 +345,7 @@ class KlassTreeFunctionalTest {
             },
         )
         assertTrue(classpath.any { it.contains("analyzer") })
-        assertTrue(classpath.any { it.contains("graph-dot") })
+        assertTrue(classpath.none { it.contains("graph-dot") })
     }
 
     @Test

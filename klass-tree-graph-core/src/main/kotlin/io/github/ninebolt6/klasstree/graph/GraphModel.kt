@@ -68,6 +68,7 @@ data class GraphEdge(
 
 @Serializable
 data class DependencyGraph(
+    val schemaVersion: Int = 1,
     val generator: String = "klass-tree",
     val generatedAt: String,
     val projectRoot: String,

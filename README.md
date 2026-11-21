@@ -182,6 +182,7 @@ analyzer's run summary instead.
 
 ```json
 {
+  "schemaVersion": 1,
   "generator": "klass-tree",
   "generatedAt": "2026-11-01T04:45:27.409574Z",
   "projectRoot": "/absolute/path/to/project",
@@ -229,18 +230,17 @@ analyzer's run summary instead.
 | `klass-tree-graph-core` | Platform-independent graph model, `AnalysisSpec`, edge merging, and the JSON exporter. |
 | `klass-tree-graph-dot` | Graphviz DOT rendering. Optional: depend on it directly if you only need DOT from `graph.json`. |
 | `klass-tree-analyzer` | Analysis API Standalone session, declaration indexing, PSI candidate collection, semantic resolution, and the forked entry point. |
-| `klass-tree-gradle-plugin` | Root plugin, extension, per-source-set module-spec tasks, and the task that launches the analyzer. |
+| `klass-tree-gradle-plugin` | Root plugin, extension, per-source-set module-spec tasks, analyzer fork, and DOT rendering. |
 
 Data flow:
 
 1. A module-spec task per selected source set collects source roots and external compile
    dependencies; the root task aggregates them into `analysis-spec.json`.
 2. `KlassTreeTask` forks a JVM with the isolated `klassTreeAnalyzer` configuration plus the
-   plugin's own runtime. The fork is required because Analysis API Standalone installs IntelliJ
+   analyzer's runtime. The fork is required because Analysis API Standalone installs IntelliJ
    services that are not safe to load into the Gradle daemon.
 3. The analyzer indexes source declarations, resolves PSI references, and builds the graph.
-4. `graph.json` is written first; `graph.dot` is rendered from that JSON by `klass-tree-graph-dot`
-   (`DotExporter`) so the two cannot drift.
+4. The analyzer writes `graph.json`; the Gradle task renders `graph.dot` from it using `DotExporter`.
 
 ## Example
 
