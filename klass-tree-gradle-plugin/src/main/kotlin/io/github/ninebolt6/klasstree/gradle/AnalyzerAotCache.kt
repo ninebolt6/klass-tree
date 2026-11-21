@@ -19,7 +19,9 @@ internal object AnalyzerAotCache {
         )
 
     fun hasConflictingArguments(jvmArgs: List<String>): Boolean =
-        jvmArgs.any { argument -> conflictingPrefixes.any(argument::startsWith) }
+        jvmArgs.any { argument ->
+            conflictingPrefixes.any(argument::startsWith)
+        }
 
     fun arguments(
         directory: File?,
