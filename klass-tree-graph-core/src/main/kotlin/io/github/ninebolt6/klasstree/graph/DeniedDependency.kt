@@ -1,10 +1,12 @@
 package io.github.ninebolt6.klasstree.graph
 
-import kotlinx.serialization.Serializable
-import java.io.Serializable as JavaSerializable
+import java.io.Serializable
 
-@Serializable
 data class DeniedDependency(
     val from: String? = null,
     val to: String,
-) : JavaSerializable
+) : Serializable {
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}
