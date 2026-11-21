@@ -9,9 +9,6 @@ data class DependencyBaseline(
 ) {
     init {
         require(schemaVersion == 1) { "Unsupported baseline schema version: $schemaVersion" }
-        require(edges.map { Triple(it.from, it.to, it.kind) }.distinct().size == edges.size) {
-            "Duplicate baseline edges"
-        }
     }
 }
 
@@ -23,8 +20,4 @@ data class BaselineEdge(
     val callSites: Int,
     val toFqName: String? = null,
     val toPackage: String? = null,
-) {
-    init {
-        require(callSites >= 0) { "Baseline call-site counts must not be negative" }
-    }
-}
+)

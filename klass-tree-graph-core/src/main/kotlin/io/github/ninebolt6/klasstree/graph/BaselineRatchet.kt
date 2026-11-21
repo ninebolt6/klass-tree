@@ -36,27 +36,23 @@ object BaselineRatchet {
                     if (before == after) null else EdgeCountChange(key.first, key.second, key.third, before, after)
                 }.sortedWith(compareBy({ it.from }, { it.to }, { it.kind.name }))
 
-        fun deniedNow(change: EdgeCountChange): Boolean {
-            val node = nodes[change.to] ?: return deniedInBaseline(change, previous, deniedTargets)
-            return deniedTargets.any { node.fqName.matchesTarget(it) || node.packageName.matchesTarget(it) }
-        }
         return BaselineComparison(
             changes = changes,
-            violations = changes.filter { it.current > it.baseline && deniedNow(it) },
+            violations =
+                changes.filter { change ->
+                    change.current > change.baseline &&
+                        nodes.getValue(change.to).let { node ->
+                            deniedTargets.any { node.fqName.matchesTarget(it) || node.packageName.matchesTarget(it) }
+                        }
+                },
             progress =
-                changes.filter {
-                    it.current < it.baseline && (deniedNow(it) || deniedInBaseline(it, previous, deniedTargets))
+                changes.filter { change ->
+                    change.current < change.baseline &&
+                        previous.getValue(Triple(change.from, change.to, change.kind)).let { edge ->
+                            deniedTargets.any { edge.toFqName.matchesTarget(it) || edge.toPackage.matchesTarget(it) }
+                        }
                 },
         )
-    }
-
-    private fun deniedInBaseline(
-        change: EdgeCountChange,
-        previous: Map<Triple<String, String, EdgeKind>, BaselineEdge>,
-        deniedTargets: List<String>,
-    ): Boolean {
-        val old = previous[Triple(change.from, change.to, change.kind)] ?: return false
-        return deniedTargets.any { old.toFqName.matchesTarget(it) || old.toPackage.matchesTarget(it) }
     }
 
     private fun String?.matchesTarget(prefix: String): Boolean = this == prefix || this?.startsWith("$prefix.") == true
