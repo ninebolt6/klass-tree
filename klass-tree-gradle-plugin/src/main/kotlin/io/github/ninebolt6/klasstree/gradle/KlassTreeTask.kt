@@ -58,7 +58,7 @@ abstract class KlassTreeTask : DefaultTask() {
     abstract val analyzerJvmArgs: ListProperty<String>
 
     @get:Internal
-    abstract val aotCacheDirectory: DirectoryProperty
+    abstract val aotCache: Property<Boolean>
 
     @get:Classpath
     abstract val analysisClasspath: ConfigurableFileCollection
@@ -137,18 +137,18 @@ abstract class KlassTreeTask : DefaultTask() {
     }
 
     private fun aotJvmArguments(classpath: List<File>): List<String> {
-        if (!aotCacheDirectory.isPresent) return emptyList()
+        if (!aotCache.getOrElse(false)) return emptyList()
         val javaVersion = JavaVersion.current().majorVersion.toInt()
         return if (javaVersion < AnalyzerAotCache.MIN_JAVA_VERSION) {
-            logger.warn("klass-tree: aotCacheDirectory requires Java 25 or newer; running without an AOT cache.")
+            logger.warn("klass-tree: aotCache requires Java 25 or newer; running without an AOT cache.")
             emptyList()
         } else if (AnalyzerAotCache.hasConflictingArguments(analyzerJvmArgs.get())) {
-            logger.warn("klass-tree: analyzerJvmArgs configures CDS or AOT; ignoring aotCacheDirectory.")
+            logger.warn("klass-tree: analyzerJvmArgs configures CDS or AOT; ignoring aotCache.")
             emptyList()
         } else {
             try {
                 AnalyzerAotCache.arguments(
-                    aotCacheDirectory.get().asFile,
+                    File(projectRoot.get(), ".gradle/klass-tree/aot"),
                     classpath,
                     javaVersion,
                     listOf("java.runtime.version", "java.vendor", "java.home").map { System.getProperty(it) },

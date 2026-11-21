@@ -216,14 +216,37 @@ class KlassTreeFunctionalTest {
 
     @Test
     fun `AOT cache is ignored with one warning on older Java`() {
-        assumeTrue(Runtime.version().feature() < 25)
-        writeProject(klassTreeConfig = "aotCacheDirectory.set(layout.projectDirectory.dir(\"analyzer-aot\"))")
+        val javaHome =
+            listOfNotNull(
+                System.getenv("JDK21_HOME"),
+                System.getenv("JAVA_HOME_21_X64"),
+                System.getProperty("java.home").takeIf { Runtime.version().feature() < 25 },
+            ).firstOrNull { Files.isRegularFile(Path.of(it, "release")) }
+        assumeTrue(javaHome != null, "Older JDK not available; set JDK21_HOME to enable fallback functional coverage")
+        writeProject(klassTreeConfig = "aotCache.set(true)")
+
+        val result = runner("klassTree", "-Dorg.gradle.java.home=$javaHome").build()
+
+        assertEquals(1, result.output.lineSequence().count { it.contains("aotCache requires Java 25") })
+        assertTrue(result.output.contains("errors=0"))
+        assertFalse(projectDir.resolve(".gradle/klass-tree/aot").toFile().exists())
+    }
+
+    @Test
+    fun `AOT cache respects explicit CDS options`() {
+        writeProject(
+            klassTreeConfig =
+                """
+                aotCache.set(true)
+                analyzerJvmArgs.add("-Xshare:off")
+                """.trimIndent(),
+        )
 
         val result = runner("klassTree").build()
 
-        assertEquals(1, result.output.lineSequence().count { it.contains("aotCacheDirectory requires Java 25") })
+        assertEquals(1, result.output.lineSequence().count { it.contains("ignoring aotCache") })
         assertTrue(result.output.contains("errors=0"))
-        assertFalse(projectDir.resolve("analyzer-aot").toFile().exists())
+        assertFalse(projectDir.resolve(".gradle/klass-tree/aot").toFile().exists())
     }
 
     @Test
@@ -238,7 +261,7 @@ class KlassTreeFunctionalTest {
         writeProject(
             klassTreeConfig =
                 """
-                aotCacheDirectory.set(layout.projectDirectory.dir("analyzer-aot"))
+                aotCache.set(true)
                 analyzerJvmArgs.add("-Xlog:aot")
                 """.trimIndent(),
         )
@@ -255,7 +278,7 @@ class KlassTreeFunctionalTest {
         assertTrue(training.output.contains("-XX:AOTCacheOutput="))
         val graph = normalizedGraph()
         val cache =
-            Files.list(projectDir.resolve("analyzer-aot")).use { files ->
+            Files.list(projectDir.resolve(".gradle/klass-tree/aot")).use { files ->
                 files.filter { it.fileName.toString().endsWith(".aot") }.toList().single()
             }
         assertTrue(Files.size(cache) > 0)

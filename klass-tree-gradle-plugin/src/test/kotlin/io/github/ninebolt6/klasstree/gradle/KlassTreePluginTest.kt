@@ -17,7 +17,7 @@ class KlassTreePluginTest {
         val extension = project.extensions.findByType(KlassTreeExtension::class.java)
         assertNotNull(extension)
         assertEquals(false, extension.includeTests.get())
-        assertFalse(extension.aotCacheDirectory.isPresent)
+        assertFalse(extension.aotCache.get())
         assertEquals(setOf("json", "dot"), extension.formats.get())
         assertEquals(
             KlassTreeExtension.DEFAULT_ANALYSIS_API_VERSION,

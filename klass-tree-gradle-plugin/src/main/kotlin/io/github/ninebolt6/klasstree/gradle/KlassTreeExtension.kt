@@ -29,7 +29,7 @@ abstract class KlassTreeExtension
         abstract val analysisApiVersion: Property<String>
         abstract val failOnAnalysisError: Property<Boolean>
         abstract val analyzerJvmArgs: ListProperty<String>
-        abstract val aotCacheDirectory: DirectoryProperty
+        abstract val aotCache: Property<Boolean>
 
         /**
          * Committed baseline graph that `klassTreeCheck` compares against; written by
@@ -53,6 +53,7 @@ abstract class KlassTreeExtension
             analysisApiVersion.convention(DEFAULT_ANALYSIS_API_VERSION)
             failOnAnalysisError.convention(false)
             analyzerJvmArgs.convention(emptyList())
+            aotCache.convention(false)
             deniedTargets.convention(emptyList())
         }
 

@@ -92,43 +92,15 @@ klassTree {
 
 ## Optional analyzer AOT cache (JDK 25+)
 
-To reuse JVM class-loading/linking and method-profile data between analyzer forks:
-
 ```kotlin
 klassTree {
-    aotCacheDirectory.set(layout.projectDirectory.dir(".gradle/klass-tree-aot"))
+    aotCache.set(true)
 }
 ```
 
-The property is **unset by default**. Run Gradle itself on JDK 25 or newer (a project's compilation
-toolchain alone does not change the analyzer JVM). Older Java versions log a warning and analyze
-normally. The first analysis trains the cache while producing normal graph outputs; it takes
-longer and can write approximately 135 MiB. Persist the directory between CI jobs, or leave this
-feature off. For example (replace `0.1.0` with your klass-tree plugin version):
-
-```yaml
-- uses: actions/setup-java@v6
-  id: java
-  with:
-    distribution: temurin
-    java-version: '25'
-- uses: gradle/actions/setup-gradle@v6
-- uses: actions/cache@v4
-  with:
-    path: .gradle/klass-tree-aot
-    key: klass-tree-aot-${{ runner.os }}-${{ runner.arch }}-0.1.0-${{ steps.java.outputs.version }}-${{ hashFiles('**/*.gradle.kts', '**/*.gradle', '**/gradle.properties', 'gradle/libs.versions.toml') }}
-    restore-keys: |
-      klass-tree-aot-${{ runner.os }}-${{ runner.arch }}-0.1.0-${{ steps.java.outputs.version }}-
-- run: ./gradlew klassTree
-```
-
-Cache names fingerprint the analyzer runtime classpath (paths, sizes and timestamps), JVM
-arguments, and Java version/vendor/home. Changed runtimes train a new cache; old files are not
-pruned automatically. Restore Gradle's dependency cache too: the JVM requires unchanged jar
-timestamps to reuse an AOT cache. Source edits reuse the cache. A rejected or corrupt cache falls back to
-normal JVM loading. The directory is not a task input or output: it does not change graph results,
-up-to-date checks, or build-cache keys, and enabling it does not force an otherwise up-to-date task
-to run.
+Off by default. Requires a JDK 25+ analyzer JVM (run Gradle on JDK 25+, not just the
+project's compilation toolchain). The first run trains the cache and is slower.
+Persist `<rootProject>/.gradle/klass-tree/aot/` in CI; otherwise leave caching off.
 
 ## Checking dependency regressions
 
