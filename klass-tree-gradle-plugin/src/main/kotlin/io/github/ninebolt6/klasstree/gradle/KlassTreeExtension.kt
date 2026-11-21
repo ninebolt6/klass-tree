@@ -1,5 +1,6 @@
 package io.github.ninebolt6.klasstree.gradle
 
+import io.github.ninebolt6.klasstree.graph.DeniedDependency
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.ProjectLayout
 import org.gradle.api.file.RegularFileProperty
@@ -10,9 +11,6 @@ import javax.inject.Inject
 
 /**
  * Configuration for the `klassTree` task.
- *
- * The extension is registered on the root project. It intentionally exposes only Gradle types so
- * that the plugin can be configured from either the Kotlin or Groovy DSL.
  */
 abstract class KlassTreeExtension
     @Inject
@@ -37,12 +35,14 @@ abstract class KlassTreeExtension
          */
         abstract val baselineFile: RegularFileProperty
 
-        /**
-         * fqName/package prefixes that must not gain new references relative to the baseline, for
-         * example `com.example.legacy`. Only edges or call sites absent from the baseline count as
-         * violations, so the baseline freezes the current state while migration shrinks it.
-         */
-        abstract val deniedTargets: ListProperty<String>
+        abstract val deniedDependencies: ListProperty<DeniedDependency>
+
+        fun deny(
+            from: String? = null,
+            to: String,
+        ) {
+            deniedDependencies.add(DeniedDependency(from, to))
+        }
 
         init {
             includeTests.convention(false)
@@ -54,7 +54,7 @@ abstract class KlassTreeExtension
             failOnAnalysisError.convention(false)
             analyzerJvmArgs.convention(emptyList())
             aotCache.convention(false)
-            deniedTargets.convention(emptyList())
+            deniedDependencies.convention(emptyList())
         }
 
         companion object {

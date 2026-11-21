@@ -41,7 +41,23 @@ class KlassTreeRatchetFunctionalTest {
         assertTrue(removed.output.contains("1 denied reference(s) removed since the baseline"))
     }
 
-    private fun writeProject() {
+    @Test
+    fun `deny pairs ignore other sources and reject matching sources with configuration cache`() {
+        writeProject("""deny(from = "a", to = "legacy")""")
+        runner("klassTreeBaseline").build()
+
+        write("src/main/kotlin/b/Main.kt", source.replace("package a", "package b"))
+        runner("klassTreeCheck", "--configuration-cache").build()
+
+        write("src/main/kotlin/a/Main.kt", source.replace("value.touch()", "value.touch()\n        value.touch()"))
+        val result = runner("klassTreeCheck", "--configuration-cache").buildAndFail()
+
+        assertTrue(result.output.contains("Configuration cache entry reused"))
+        assertTrue(result.output.contains("new reference(s) violating [a -> legacy]"))
+        assertTrue(result.output.contains("a.Main -> legacy.Old FUNCTION_CALL (1 -> 2 call sites)"))
+    }
+
+    private fun writeProject(rule: String = """deny(to = "legacy")""") {
         write(
             "settings.gradle.kts",
             """
@@ -62,7 +78,7 @@ class KlassTreeRatchetFunctionalTest {
                 id("io.github.ninebolt6.klass-tree")
             }
             repositories { mavenCentral() }
-            klassTree { deniedTargets.set(listOf("legacy")) }
+            klassTree { $rule }
             """,
         )
         write("src/main/kotlin/legacy/Old.kt", "package legacy\nclass Old { fun touch() = Unit }")

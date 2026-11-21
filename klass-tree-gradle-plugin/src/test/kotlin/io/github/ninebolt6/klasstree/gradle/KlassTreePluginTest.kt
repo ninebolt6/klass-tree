@@ -1,5 +1,6 @@
 package io.github.ninebolt6.klasstree.gradle
 
+import io.github.ninebolt6.klasstree.graph.DeniedDependency
 import org.gradle.api.GradleException
 import org.gradle.testfixtures.ProjectBuilder
 import kotlin.test.Test
@@ -19,6 +20,13 @@ class KlassTreePluginTest {
         assertEquals(false, extension.includeTests.get())
         assertFalse(extension.aotCache.get())
         assertEquals(setOf("json", "dot"), extension.formats.get())
+        assertEquals(emptyList(), extension.deniedDependencies.get())
+        extension.deny(to = "legacy")
+        extension.deny(from = "domain", to = "infra")
+        assertEquals(
+            listOf(DeniedDependency(to = "legacy"), DeniedDependency(from = "domain", to = "infra")),
+            extension.deniedDependencies.get(),
+        )
         assertEquals(
             KlassTreeExtension.DEFAULT_ANALYSIS_API_VERSION,
             extension.analysisApiVersion.get(),
