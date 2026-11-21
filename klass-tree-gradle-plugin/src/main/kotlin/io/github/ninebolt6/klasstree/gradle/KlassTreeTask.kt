@@ -1,7 +1,9 @@
 package io.github.ninebolt6.klasstree.gradle
 
 import io.github.ninebolt6.klasstree.graph.AnalysisSpec
+import io.github.ninebolt6.klasstree.graph.DependencyGraph
 import io.github.ninebolt6.klasstree.graph.KlassTreeJson
+import io.github.ninebolt6.klasstree.graph.dot.DotExporter
 import kotlinx.serialization.builtins.ListSerializer
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
@@ -22,6 +24,7 @@ import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
 import java.io.File
 import java.io.IOException
+import java.nio.file.Files
 import javax.inject.Inject
 
 /**
@@ -121,7 +124,6 @@ abstract class KlassTreeTask : DefaultTask() {
                 javaexec.args(
                     specFile.absolutePath,
                     output.absolutePath,
-                    formats.get().sorted().joinToString(","),
                 )
                 analyzerJvmArgs.get().forEach(javaexec::jvmArgs)
                 javaexec.jvmArgs(aotArgs)
@@ -133,6 +135,22 @@ abstract class KlassTreeTask : DefaultTask() {
                 "klass-tree analyzer failed with exit code ${result.exitValue}. " +
                     "See the analyzer output above for details.",
             )
+        }
+
+        writeDot(output)
+    }
+
+    private fun writeDot(output: File) {
+        val dotFile = File(output, "graph.dot").toPath()
+        if ("dot" in formats.get()) {
+            val graph =
+                KlassTreeJson.decodeFromString(
+                    DependencyGraph.serializer(),
+                    File(output, "graph.json").readText(),
+                )
+            DotExporter.write(graph, dotFile)
+        } else {
+            Files.deleteIfExists(dotFile)
         }
     }
 

@@ -54,6 +54,7 @@ class JsonExporterTest {
         val decoded = KlassTreeJson.decodeFromString<DependencyGraph>(json)
 
         assertEquals(graph, decoded)
+        assertTrue(json.contains("\"schemaVersion\": 1"))
         assertTrue(json.contains("\"package\": \"com.example\""))
         assertTrue(!json.contains("null"))
     }

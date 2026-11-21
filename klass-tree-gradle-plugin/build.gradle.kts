@@ -8,6 +8,7 @@ val testPluginClasspath = configurations.create("testPluginClasspath")
 
 dependencies {
     implementation(project(":klass-tree-graph-core"))
+    implementation(project(":klass-tree-graph-dot"))
     implementation(project(":klass-tree-analyzer"))
 
     // The Kotlin Gradle plugin is supplied by the consuming build. The plugin only needs the
