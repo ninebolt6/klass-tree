@@ -53,6 +53,7 @@ subprojects {
     tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
+            freeCompilerArgs.add("-Xjdk-release=21")
             allWarningsAsErrors.set(true)
         }
     }
@@ -62,6 +63,13 @@ subprojects {
     }
 
     plugins.withId("java") {
+        extensions.configure<JavaPluginExtension> {
+            sourceCompatibility = JavaVersion.VERSION_21
+            targetCompatibility = JavaVersion.VERSION_21
+        }
+        tasks.withType<JavaCompile>().configureEach {
+            options.release.set(21)
+        }
         tasks.named("check") {
             dependsOn(ktlintCheck)
         }

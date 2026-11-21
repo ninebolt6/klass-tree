@@ -11,11 +11,16 @@ are resolved but no external nodes are emitted.
 
 ## Requirements
 
-- JDK 21 (the analyzer runs on a Java 21 runtime);
+- JDK 21+ runtime;
 - Gradle 9.x;
 - The Kotlin JVM Gradle plugin on the **root buildscript classpath** — the plugin uses KGP API
   types, so it must be declared even if only with `apply false`;
 - `mavenCentral()` so the isolated `klassTreeAnalyzer` configuration can resolve the Analysis API.
+
+## Development
+
+klass-tree is built with JDK 25 and targets Java 21 bytecode. `includeBuild` compiles
+from source, so consumers using it also need a JDK 25 toolchain.
 
 ## Using the plugin
 
