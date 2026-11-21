@@ -35,19 +35,28 @@ object BaselineRatchet {
                     val after = present[key]?.callSites?.size ?: 0
                     if (before == after) null else EdgeCountChange(key.first, key.second, key.third, before, after)
                 }.sortedWith(compareBy({ it.from }, { it.to }, { it.kind.name }))
-        val denied =
-            changes.filter { change ->
-                val node = nodes[change.to]
-                val old = previous[Triple(change.from, change.to, change.kind)]
-                val fqName = if (node == null) old?.toFqName else node.fqName
-                val packageName = if (node == null) old?.toPackage else node.packageName
-                deniedTargets.any { fqName.matchesTarget(it) || packageName.matchesTarget(it) }
-            }
+
+        fun deniedNow(change: EdgeCountChange): Boolean {
+            val node = nodes[change.to] ?: return deniedInBaseline(change, previous, deniedTargets)
+            return deniedTargets.any { node.fqName.matchesTarget(it) || node.packageName.matchesTarget(it) }
+        }
         return BaselineComparison(
             changes = changes,
-            violations = denied.filter { it.current > it.baseline },
-            progress = denied.filter { it.current < it.baseline },
+            violations = changes.filter { it.current > it.baseline && deniedNow(it) },
+            progress =
+                changes.filter {
+                    it.current < it.baseline && (deniedNow(it) || deniedInBaseline(it, previous, deniedTargets))
+                },
         )
+    }
+
+    private fun deniedInBaseline(
+        change: EdgeCountChange,
+        previous: Map<Triple<String, String, EdgeKind>, BaselineEdge>,
+        deniedTargets: List<String>,
+    ): Boolean {
+        val old = previous[Triple(change.from, change.to, change.kind)] ?: return false
+        return deniedTargets.any { old.toFqName.matchesTarget(it) || old.toPackage.matchesTarget(it) }
     }
 
     private fun String?.matchesTarget(prefix: String): Boolean = this == prefix || this?.startsWith("$prefix.") == true

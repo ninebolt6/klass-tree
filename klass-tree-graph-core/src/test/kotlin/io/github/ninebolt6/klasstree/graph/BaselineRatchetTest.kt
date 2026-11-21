@@ -79,6 +79,19 @@ class BaselineRatchetTest {
     }
 
     @Test
+    fun `reductions count as progress when the target moved out of a denied package`() {
+        val baseline = BaselineRatchet.baseline(graph(listOf(edge(3))))
+        val movedTarget = target.copy(fqName = null, packageName = "fresh")
+        val moved = graph(listOf(edge(1))).copy(nodes = listOf(source, movedTarget))
+        val reduced = BaselineRatchet.compare(baseline, moved, listOf("legacy"))
+        assertEquals(listOf(3 to 1), reduced.progress.map { it.baseline to it.current })
+
+        val grownGraph = graph(listOf(edge(4))).copy(nodes = moved.nodes)
+        val grown = BaselineRatchet.compare(baseline, grownGraph, listOf("legacy"))
+        assertTrue(grown.violations.isEmpty())
+    }
+
+    @Test
     fun `all changes are reported even when targets are not denied`() {
         val baseline = BaselineRatchet.baseline(graph(listOf(edge(1))))
         val result = BaselineRatchet.compare(baseline, graph(listOf(edge(2))), emptyList())
