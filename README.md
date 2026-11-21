@@ -11,7 +11,7 @@ are resolved but no external nodes are emitted.
 
 ## Requirements
 
-- JDK 21+ to run the plugin and analyzer; JDK 25 to build/develop klass-tree;
+- JDK 25 toolchain installed for `includeBuild` (compiles klass-tree from source); Gradle may run on JDK 21+;
 - Gradle 9.x;
 - The Kotlin JVM Gradle plugin on the **root buildscript classpath** — the plugin uses KGP API
   types, so it must be declared even if only with `apply false`;
