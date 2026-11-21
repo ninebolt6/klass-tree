@@ -27,13 +27,7 @@ import java.io.IOException
 import java.nio.file.Files
 import javax.inject.Inject
 
-/**
- * Aggregates module specs and launches the analyzer in a separate JVM.
- *
- * The Gradle daemon never loads Analysis API or IntelliJ platform classes. [analysisClasspath]
- * contains the isolated `klassTreeAnalyzer` configuration; [analyzerClasspath] contains the
- * analyzer and its graph/serialization runtime.
- */
+// Analysis API and IntelliJ classes must not be loaded into the Gradle daemon.
 abstract class KlassTreeTask : DefaultTask() {
     @get:InputFiles
     @get:PathSensitive(PathSensitivity.NONE)

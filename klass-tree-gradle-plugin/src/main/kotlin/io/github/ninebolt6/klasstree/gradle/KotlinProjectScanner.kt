@@ -14,14 +14,7 @@ internal data class KotlinProjectScan(
     val moduleTasks: List<TaskProvider<KlassTreeModuleSpecTask>>,
 )
 
-/**
- * Registers module-spec tasks from the Kotlin JVM Gradle model.
- *
- * This class is deliberately separate from [KlassTreePlugin]: it references Kotlin Gradle plugin
- * API types and is only loaded when the consuming build actually applies the Kotlin JVM plugin.
- * If the Kotlin plugin is not on the root buildscript classpath, the plugin reports a clear error
- * instead of failing with a class-loading exception in the Gradle daemon.
- */
+// Kotlin Gradle plugin API classes may be absent until the consuming build applies that plugin.
 @OptIn(ExperimentalKotlinGradlePluginApi::class)
 internal object KotlinProjectScanner {
     fun configureProject(
@@ -96,8 +89,6 @@ internal object KotlinProjectScanner {
         directories += sourceSet.kotlin.srcDirs
         directories += sourceSet.generatedKotlin.srcDirs
         if (includeJavaSources) {
-            // Kotlin compilations share their source set name with the matching Java SourceSet
-            // (main, test, ...), whose java.srcDirs carries src/<name>/java.
             project.extensions
                 .findByType(org.gradle.api.plugins.JavaPluginExtension::class.java)
                 ?.sourceSets

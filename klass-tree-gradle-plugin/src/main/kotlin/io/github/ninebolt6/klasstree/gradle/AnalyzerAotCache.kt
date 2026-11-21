@@ -24,13 +24,13 @@ internal object AnalyzerAotCache {
         }
 
     fun arguments(
-        directory: File?,
+        directory: File,
         classpath: List<File>,
         javaVersion: Int,
         javaIdentity: List<String>,
         jvmArgs: List<String>,
     ): List<String> {
-        if (directory == null || javaVersion < MIN_JAVA_VERSION || hasConflictingArguments(jvmArgs)) return emptyList()
+        if (javaVersion < MIN_JAVA_VERSION || hasConflictingArguments(jvmArgs)) return emptyList()
 
         val digest = MessageDigest.getInstance("SHA-256")
 

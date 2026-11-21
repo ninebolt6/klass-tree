@@ -5,8 +5,7 @@ plugins {
 dependencies {
     implementation(project(":klass-tree-graph-core"))
 
-    // The Analysis API is provided by the Gradle plugin's isolated analysis configuration at
-    // runtime, so it is not exposed as a transitive dependency of the plugin.
+    // Analysis API runtime dependencies must remain isolated from the Gradle plugin classpath.
     compileOnly(libs.kotlin.analysis.api)
 
     testImplementation(libs.kotlin.analysis.api)
@@ -21,6 +20,5 @@ kotlin {
 
 tasks.test {
     useJUnitPlatform()
-    // Analysis API creates a few non-daemon helper threads. Keep the test JVM bounded.
     systemProperty("java.awt.headless", "true")
 }

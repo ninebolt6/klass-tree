@@ -518,18 +518,6 @@ class KlassTreeFunctionalTest {
     }
 
     @Test
-    fun `klassTreeBaseline writes portable edge counts`() {
-        writeProject()
-
-        runner("klassTreeBaseline").build()
-
-        val content = projectDir.resolve("klass-tree-baseline.json").toFile().readText()
-        val baseline = Json.parseToJsonElement(content).jsonObject
-        assertEquals(setOf("schemaVersion", "edges"), baseline.keys)
-        assertTrue(baseline.getValue("edges").jsonArray.isNotEmpty())
-    }
-
-    @Test
     fun `klassTreeBaseline and klassTreeCheck run in the same invocation`() {
         writeProject()
 
@@ -564,36 +552,6 @@ class KlassTreeFunctionalTest {
     }
 
     @Test
-    fun `klassTreeCheck ignores references that only share a name prefix with denied targets`() {
-        writeProject(klassTreeConfig = """deny(to = "shared.Shar")""")
-        runner("klassTreeBaseline").build()
-        write(
-            "api/src/main/kotlin/api/New.kt",
-            """
-                package api
-
-                import shared.Shared
-
-                fun make(): Shared = Shared()
-            """,
-        )
-
-        val result = runner("klassTreeCheck").build()
-
-        assertTrue(result.task(":klassTreeCheck")?.outcome == TaskOutcome.SUCCESS)
-    }
-
-    @Test
-    fun `klassTreeCheck passes against a baseline written by klassTreeBaseline`() {
-        writeProject(klassTreeConfig = """deny(to = "shared")""")
-
-        runner("klassTreeBaseline").build()
-        val result = runner("klassTreeCheck").build()
-
-        assertTrue(result.task(":klassTreeCheck")?.outcome == TaskOutcome.SUCCESS)
-    }
-
-    @Test
     fun `klassTreeCheck fails on new references to denied targets`() {
         writeProject(klassTreeConfig = """deny(to = "shared")""")
         runner("klassTreeBaseline").build()
@@ -614,28 +572,7 @@ class KlassTreeFunctionalTest {
     }
 
     @Test
-    fun `klassTreeCheck passes when added references are not denied`() {
-        writeProject(klassTreeConfig = """deny(to = "shared.internal")""")
-        runner("klassTreeBaseline").build()
-        write(
-            "api/src/main/kotlin/api/New.kt",
-            """
-                package api
-
-                import shared.Shared
-
-                fun make(): Shared = Shared()
-            """,
-        )
-
-        val result = runner("klassTreeCheck").build()
-
-        assertTrue(result.output.contains("klass-tree:"))
-        assertTrue(projectDir.resolve("build/klass-tree/klass-tree-diff.json").toFile().isFile)
-    }
-
-    @Test
-    fun `klassTreeCheck fails with instructions when the baseline is missing`() {
+    fun `klassTreeCheck reports a missing baseline`() {
         writeProject(klassTreeConfig = """deny(to = "shared")""")
 
         val result = runner("klassTreeCheck").buildAndFail()

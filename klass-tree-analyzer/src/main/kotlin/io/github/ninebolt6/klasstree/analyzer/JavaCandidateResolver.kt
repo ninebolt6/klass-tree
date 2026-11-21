@@ -12,10 +12,6 @@ import com.intellij.psi.PsiVariable
 import com.intellij.psi.util.PsiTreeUtil
 import io.github.ninebolt6.klasstree.graph.EdgeKind
 
-/**
- * Resolves [JavaCandidate]s through Java PSI `resolve()` calls; no Kotlin Analysis API session
- * is needed.
- */
 internal class JavaCandidateResolver(
     private val index: DeclarationIndex,
     private val stats: MutableResolutionStats,
@@ -124,9 +120,7 @@ internal class JavaCandidateResolver(
     }
 
     private fun resolveNewExpression(element: PsiNewExpression) {
-        // `new Foo(){}` keeps the referenced class on the anonymous class, and
-        // implicit default constructors never resolve through resolveMethod();
-        // the declared class reference is the edge target either way.
+        // Implicit default constructors do not resolve through Java PSI resolveMethod().
         val ref = element.anonymousClass?.baseClassReference ?: element.classReference
         val resolved = ref?.resolve() as? PsiClass
         if (resolved == null) {
@@ -143,9 +137,7 @@ internal class JavaCandidateResolver(
     private fun resolveMethodCall(element: PsiMethodCallExpression) {
         val refName = element.methodExpression.referenceName
         if (refName == "super" || refName == "this") {
-            // resolveMethod() on constructor chains goes through Cls mirror
-            // services that a standalone session does not have; resolve the
-            // superclass structurally instead.
+            // Standalone sessions lack the Cls mirror services needed for constructor-chain resolution.
             val chained = chainedConstructorTarget(element)
             if (chained == null) {
                 stats.skipped++
@@ -159,8 +151,7 @@ internal class JavaCandidateResolver(
             return
         }
         val method = element.resolveMethod()
-        // Record accessors and other methods this session cannot resolve still
-        // name their receiver type; the graph only needs the owning class.
+        // Java PSI may not resolve record accessors in standalone sessions.
         val target = method?.containingClass ?: qualifierReceiverClass(element)
         if (target == null) {
             if (method == null) stats.unresolved++ else stats.skipped++
@@ -191,8 +182,6 @@ internal class JavaCandidateResolver(
         }
     }
 
-    // `super(...)` and `this(...)` resolve the target structurally: the owner's extends list for
-    // `super`, the owner itself for `this` (which then lands in selfEdgesSkipped).
     private fun chainedConstructorTarget(call: PsiMethodCallExpression): PsiClass? {
         val owner = PsiTreeUtil.getParentOfType(call, PsiClass::class.java) ?: return null
         return when (call.methodExpression.referenceName) {

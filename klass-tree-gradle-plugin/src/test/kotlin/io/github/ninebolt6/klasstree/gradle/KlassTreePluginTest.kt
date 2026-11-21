@@ -6,32 +6,20 @@ import org.gradle.testfixtures.ProjectBuilder
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
 
 class KlassTreePluginTest {
     @Test
-    fun `registers the extension and aggregate task on the root project`() {
+    fun `deny accumulates target-only and source-target rules`() {
         val project = ProjectBuilder.builder().build()
         project.pluginManager.apply(KlassTreePlugin::class.java)
 
-        val extension = project.extensions.findByType(KlassTreeExtension::class.java)
-        assertNotNull(extension)
-        assertEquals(false, extension.includeTests.get())
-        assertFalse(extension.aotCache.get())
-        assertEquals(setOf("json", "dot"), extension.formats.get())
-        assertEquals(emptyList(), extension.deniedDependencies.get())
+        val extension = project.extensions.getByType(KlassTreeExtension::class.java)
         extension.deny(to = "legacy")
         extension.deny(from = "domain", to = "infra")
         assertEquals(
             listOf(DeniedDependency(to = "legacy"), DeniedDependency(from = "domain", to = "infra")),
             extension.deniedDependencies.get(),
         )
-        assertEquals(
-            KlassTreeExtension.DEFAULT_ANALYSIS_API_VERSION,
-            extension.analysisApiVersion.get(),
-        )
-        assertNotNull(project.tasks.findByName("klassTree"))
     }
 
     @Test

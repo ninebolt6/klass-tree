@@ -21,10 +21,6 @@ import org.jetbrains.kotlin.analysis.api.symbols.KaSymbolOrigin
 import org.jetbrains.kotlin.analysis.api.symbols.KaTypeParameterSymbol
 import org.jetbrains.kotlin.resolution.KtResolvable
 
-/**
- * Resolves collected [ReferenceCandidate]s into graph edges. [JavaCandidate]s are delegated to
- * [JavaCandidateResolver]. Must be called inside an `analyze` block.
- */
 @OptIn(KaExperimentalApi::class)
 internal class CandidateResolver(
     internal val index: DeclarationIndex,
@@ -101,8 +97,6 @@ internal class CandidateResolver(
                 )
             }
 
-            // A function used as a call target is represented by the call resolution
-            // (FUNCTION_CALL / CONSTRUCTOR_CALL). `::foo` is handled separately.
             is KaNamedFunctionSymbol -> {
                 stats.skipped++
             }
@@ -197,9 +191,6 @@ internal class CandidateResolver(
                 SymbolDisposition.RECORD
             }
 
-            // Implicit primary constructors and annotation constructors are generated members of
-            // source classes. They are needed for CONSTRUCTOR_CALL / ANNOTATION edges. Other
-            // generated members (copy, componentN, ...) stay out of the initial graph.
             KaSymbolOrigin.SOURCE_MEMBER_GENERATED -> {
                 if (symbol is KaConstructorSymbol) {
                     SymbolDisposition.RECORD
@@ -212,8 +203,6 @@ internal class CandidateResolver(
                 SymbolDisposition.EXTERNAL
             }
 
-            // Java sources, compiler-generated members and compiler plugin declarations are not
-            // part of the initial graph. They are counted separately from unresolved references.
             else -> {
                 SymbolDisposition.SKIPPED
             }

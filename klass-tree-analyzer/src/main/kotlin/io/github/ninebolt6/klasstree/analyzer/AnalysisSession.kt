@@ -38,11 +38,8 @@ internal fun buildAnalysisSession(
 
             val specsById = spec.modules.associateBy { it.id }
             val builtModules = LinkedHashMap<String, KaSourceModule>()
-            // One library module per normalized classpath entry is shared across source modules.
-            // This indexes each jar once even when module classpaths differ slightly.
             val builtLibraries = LinkedHashMap<Path, KaLibraryModule>()
-            // A source root claimed by several modules would bind its files to more than
-            // one KaModule and corrupt resolution, so the first module claims it.
+            // A PSI source root must not belong to multiple Analysis API modules.
             val claimedSourceRoots = HashSet<Path>()
             val building = LinkedHashSet<String>()
 
@@ -87,8 +84,6 @@ internal fun buildAnalysisSession(
                                 val dependencySpec = specsById[dependencyId] ?: return@forEach
                                 val dependency = buildSourceModule(dependencyId)
                                 addRegularDependency(dependency)
-                                // Source sets of one project see each other's internal
-                                // declarations, like Kotlin's friend paths for test→main.
                                 if (dependencySpec.projectPath == moduleSpec.projectPath) {
                                     addFriendDependency(dependency)
                                 }
