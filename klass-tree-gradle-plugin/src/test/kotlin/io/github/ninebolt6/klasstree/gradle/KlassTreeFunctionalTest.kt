@@ -234,6 +234,7 @@ class KlassTreeFunctionalTest {
 
     @Test
     fun `AOT cache respects explicit CDS options`() {
+        assumeTrue(Runtime.version().feature() >= 25, "AOT conflict coverage requires a Java 25 test JVM")
         writeProject(
             klassTreeConfig =
                 """
@@ -251,13 +252,8 @@ class KlassTreeFunctionalTest {
 
     @Test
     fun `AOT cache trains loads and tolerates a truncated cache with configuration cache`() {
-        val javaHome =
-            listOfNotNull(
-                System.getenv("JDK25_HOME"),
-                System.getenv("JAVA_HOME_25_X64"),
-                System.getProperty("java.home").takeIf { Runtime.version().feature() >= 25 },
-            ).map { Path.of(it) }.firstOrNull { Files.isRegularFile(it.resolve("release")) }
-        assumeTrue(javaHome != null, "JDK 25 not available; set JDK25_HOME to enable AOT functional coverage")
+        assumeTrue(Runtime.version().feature() >= 25, "AOT cache mapping requires a Java 25 test JVM")
+        val javaHome = System.getProperty("java.home")
         writeProject(
             klassTreeConfig =
                 """
@@ -268,7 +264,7 @@ class KlassTreeFunctionalTest {
         val arguments =
             arrayOf(
                 "klassTree",
-                "-Dorg.gradle.java.home=${requireNotNull(javaHome)}",
+                "-Dorg.gradle.java.home=$javaHome",
                 "--info",
                 "--configuration-cache",
                 "--rerun-tasks",
