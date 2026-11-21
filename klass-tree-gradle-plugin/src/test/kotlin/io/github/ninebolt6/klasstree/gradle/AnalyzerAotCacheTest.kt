@@ -49,14 +49,26 @@ class AnalyzerAotCacheTest {
     }
 
     @Test
-    fun `classpath paths contents and order invalidate the cache`() {
+    fun `classpath paths sizes and order invalidate the cache`() {
         val first = root.resolve("first.jar").toFile().apply { writeText("first") }
         val second = root.resolve("second.jar").toFile().apply { writeText("second") }
         val initial = arguments(classpath = listOf(first, second))
         assertNotEquals(initial, arguments(classpath = listOf(second, first)))
         assertNotEquals(initial, arguments(classpath = listOf(first)))
+        val timestamp = Files.getLastModifiedTime(first.toPath())
         first.writeText("different length")
+        Files.setLastModifiedTime(first.toPath(), timestamp)
         assertNotEquals(initial, arguments(classpath = listOf(first, second)))
+    }
+
+    @Test
+    fun `same size and timestamp retain the cache without reading contents`() {
+        val jar = root.resolve("library.jar").toFile().apply { writeText("first") }
+        val timestamp = Files.getLastModifiedTime(jar.toPath())
+        val initial = arguments(classpath = listOf(jar))
+        jar.writeText("other")
+        Files.setLastModifiedTime(jar.toPath(), timestamp)
+        assertEquals(initial, arguments(classpath = listOf(jar)))
     }
 
     @Test
@@ -68,7 +80,7 @@ class AnalyzerAotCacheTest {
     }
 
     @Test
-    fun `changed class files in directory classpaths invalidate the cache`() {
+    fun `changed class file metadata in directory classpaths invalidates the cache`() {
         val classes = root.resolve("classes").toFile().apply { mkdirs() }
         val file = File(classes, "Example.class").apply { writeText("old") }
         val initial = arguments(classpath = listOf(classes))

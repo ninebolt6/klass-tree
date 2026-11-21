@@ -1,10 +1,7 @@
 package io.github.ninebolt6.klasstree.gradle
 
 import java.io.File
-import java.io.OutputStream
 import java.nio.file.Files
-import java.nio.file.Path
-import java.security.DigestInputStream
 import java.security.MessageDigest
 
 internal object AnalyzerAotCache {
@@ -34,13 +31,11 @@ internal object AnalyzerAotCache {
                         add(root.relativize(file).toString())
                         add(Files.size(file).toString())
                         add(Files.getLastModifiedTime(file).toString())
-                        addContents(digest, file)
                     }
                 }
             } else {
                 add(Files.size(root).toString())
                 add(Files.getLastModifiedTime(root).toString())
-                addContents(digest, root)
             }
         }
         Files.createDirectories(directory.toPath())
@@ -48,14 +43,5 @@ internal object AnalyzerAotCache {
         val cache = File(directory, "analyzer-$hash.aot").absoluteFile
         val option = if (cache.isFile) "AOTCache" else "AOTCacheOutput"
         return listOf("-XX:AOTMode=auto", "-XX:$option=$cache")
-    }
-
-    private fun addContents(
-        digest: MessageDigest,
-        file: Path,
-    ) {
-        DigestInputStream(Files.newInputStream(file), digest).use {
-            it.transferTo(OutputStream.nullOutputStream())
-        }
     }
 }

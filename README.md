@@ -120,7 +120,7 @@ feature off. For example (replace `0.1.0` with your klass-tree plugin version):
 - run: ./gradlew klassTree
 ```
 
-Cache names fingerprint the analyzer runtime classpath (paths, file contents and timestamps), JVM
+Cache names fingerprint the analyzer runtime classpath (paths, sizes and timestamps), JVM
 arguments, and Java version/vendor/home. Changed runtimes train a new cache; old files are not
 pruned automatically. Restore Gradle's dependency cache too: the JVM requires unchanged jar
 timestamps to reuse an AOT cache. Source edits reuse the cache. A rejected or corrupt cache falls back to
