@@ -1,0 +1,87 @@
+package io.github.ninebolt6.klasstree.gradle
+
+import org.gradle.testkit.runner.GradleRunner
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.test.assertTrue
+
+class KlassTreeRatchetFunctionalTest {
+    @TempDir
+    lateinit var projectDir: Path
+
+    private val source =
+        """
+        package a
+        import legacy.Old
+        class Main {
+            fun use(value: Old) {
+                value.touch()
+            }
+        }
+        """.trimIndent()
+
+    @Test
+    fun `line shifts pass increased counts fail and removals report progress`() {
+        writeProject()
+        runner("klassTreeBaseline").build()
+
+        val shifted = source.replace("        value.touch()", "        // a comment\n        value.touch()")
+        write("src/main/kotlin/a/Main.kt", shifted)
+        runner("klassTreeCheck").build()
+
+        val increasedCalls = shifted.replace("        value.touch()", "        value.touch()\n        value.touch()")
+        write("src/main/kotlin/a/Main.kt", increasedCalls)
+        val increased = runner("klassTreeCheck").buildAndFail()
+        assertTrue(increased.output.contains("a.Main -> legacy.Old FUNCTION_CALL (1 -> 2 call sites)"))
+
+        write("src/main/kotlin/a/Main.kt", shifted.replace("        value.touch()\n", ""))
+        val removed = runner("klassTreeCheck").build()
+        assertTrue(removed.output.contains("1 denied reference(s) removed since the baseline"))
+    }
+
+    private fun writeProject() {
+        write(
+            "settings.gradle.kts",
+            """
+            pluginManagement {
+                repositories {
+                    mavenCentral()
+                    gradlePluginPortal()
+                }
+            }
+            rootProject.name = "ratchet-functional"
+            """,
+        )
+        write(
+            "build.gradle.kts",
+            """
+            plugins {
+                id("org.jetbrains.kotlin.jvm")
+                id("io.github.ninebolt6.klass-tree")
+            }
+            repositories { mavenCentral() }
+            klassTree { deniedTargets.set(listOf("legacy")) }
+            """,
+        )
+        write("src/main/kotlin/legacy/Old.kt", "package legacy\nclass Old { fun touch() = Unit }")
+        write("src/main/kotlin/a/Main.kt", source)
+    }
+
+    private fun write(
+        relativePath: String,
+        content: String,
+    ) {
+        val file = projectDir.resolve(relativePath)
+        Files.createDirectories(file.parent)
+        Files.writeString(file, content.trimIndent())
+    }
+
+    private fun runner(vararg arguments: String): GradleRunner =
+        GradleRunner
+            .create()
+            .withProjectDir(projectDir.toFile())
+            .withPluginClasspath()
+            .withArguments(*arguments, "--stacktrace", "--console=plain")
+}

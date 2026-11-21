@@ -1,10 +1,11 @@
 package io.github.ninebolt6.klasstree.gradle
 
+import io.github.ninebolt6.klasstree.graph.BaselineComparison
+import io.github.ninebolt6.klasstree.graph.BaselineRatchet
+import io.github.ninebolt6.klasstree.graph.DependencyBaseline
 import io.github.ninebolt6.klasstree.graph.DependencyGraph
-import io.github.ninebolt6.klasstree.graph.GraphDiff
-import io.github.ninebolt6.klasstree.graph.GraphDiffer
+import io.github.ninebolt6.klasstree.graph.EdgeCountChange
 import io.github.ninebolt6.klasstree.graph.GraphEdge
-import io.github.ninebolt6.klasstree.graph.GraphEdgeDelta
 import io.github.ninebolt6.klasstree.graph.GraphNode
 import io.github.ninebolt6.klasstree.graph.KlassTreeJson
 import org.gradle.api.DefaultTask
@@ -20,11 +21,8 @@ import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
+import java.io.File
 
-/**
- * Compares the current `graph.json` with the committed baseline and fails when new references to
- * `deniedTargets` appear. Always writes the full diff to [diffFile] so CI can archive it.
- */
 abstract class KlassTreeCheckTask : DefaultTask() {
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
@@ -53,97 +51,57 @@ abstract class KlassTreeCheckTask : DefaultTask() {
                     "klassTreeBaseline` and commit the result, or set klassTree.baselineFile.",
             )
         }
-        val baseline = decode(baselinePath.readText(), baselinePath)
-        val current = decode(graphJson.get().asFile.readText(), graphJson.get().asFile)
-        val diff = GraphDiffer.diff(baseline, current)
-        writeDiff(diff)
+        val baseline = decodeBaseline(baselinePath)
+        val current = decodeGraph(graphJson.get().asFile)
+        val diff = BaselineRatchet.compare(baseline, current, deniedTargets.get())
+        val file = diffFile.get().asFile
+        file.parentFile?.mkdirs()
+        file.writeText(KlassTreeJson.encodeToString(BaselineComparison.serializer(), diff))
 
-        logger.lifecycle(
-            "klass-tree: +${diff.addedNodes.size}/-${diff.removedNodes.size} nodes, " +
-                "+${diff.addedEdges.size}/-${diff.removedEdges.size} edges " +
-                "(${diff.edgeDeltas.size} edge(s) with call-site changes)",
-        )
-
-        val targets = deniedTargets.get()
-        if (targets.isEmpty()) return
-
-        val nodesById = current.nodes.associateBy { it.id }
-        val violations =
-            buildList {
-                diff.addedEdges.forEach { edge ->
-                    if (edge.to.matchesAny(targets, nodesById)) add(describe(edge, nodesById))
-                }
-                diff.edgeDeltas.forEach { delta ->
-                    if (delta.to.matchesAny(targets, nodesById) && delta.addedCallSites.isNotEmpty()) {
-                        add(describe(delta, nodesById))
-                    }
-                }
-            }
-        val baselineNodesById = baseline.nodes.associateBy { it.id }
-
-        fun isDeniedTarget(nodeId: String) =
-            nodesById[nodeId].matchesAny(targets) ||
-                baselineNodesById[nodeId].matchesAny(targets)
-        val progress =
-            diff.removedEdges.count { isDeniedTarget(it.to) } +
-                diff.edgeDeltas.count { it.removedCallSites.isNotEmpty() && isDeniedTarget(it.to) }
+        logger.lifecycle("klass-tree: ${diff.changes.size} edge(s) with call-site count changes")
+        val progress = diff.progress.sumOf { it.baseline - it.current }
         if (progress > 0) {
             logger.lifecycle("klass-tree: $progress denied reference(s) removed since the baseline")
         }
-        if (violations.isNotEmpty()) {
+        if (diff.violations.isNotEmpty()) {
+            val nodes = current.nodes.associateBy { it.id }
+            val edges = current.edges.associateBy { Triple(it.from, it.to, it.kind) }
+            val violations =
+                diff.violations.map { change ->
+                    val edge = edges.getValue(Triple(change.from, change.to, change.kind))
+                    describe(change, edge, nodes)
+                }
+            val added = diff.violations.sumOf { it.current - it.baseline }
             throw GradleException(
-                "klass-tree: ${violations.size} new reference(s) to denied targets $targets:\n" +
+                "klass-tree: $added new reference(s) to denied targets ${deniedTargets.get()}:\n" +
                     violations.joinToString("\n") { "  $it" },
             )
         }
     }
 
-    private fun decode(
-        content: String,
-        file: java.io.File,
-    ): DependencyGraph =
+    private fun decodeBaseline(file: File): DependencyBaseline =
         try {
-            KlassTreeJson.decodeFromString(DependencyGraph.serializer(), content)
+            KlassTreeJson.decodeFromString(DependencyBaseline.serializer(), file.readText())
         } catch (exception: IllegalArgumentException) {
             throw GradleException("klass-tree: cannot parse $file: ${exception.message}", exception)
         }
 
-    private fun writeDiff(diff: GraphDiff) {
-        val file = diffFile.get().asFile
-        file.parentFile?.mkdirs()
-        file.writeText(KlassTreeJson.encodeToString(GraphDiff.serializer(), diff))
-    }
-
-    private fun String.matchesAny(
-        targets: List<String>,
-        nodesById: Map<String, GraphNode>,
-    ): Boolean = nodesById[this].matchesAny(targets)
-
-    private fun GraphNode?.matchesAny(targets: List<String>): Boolean =
-        this != null &&
-            targets.any { prefix ->
-                fqName.matchesTarget(prefix) || packageName.matchesTarget(prefix)
-            }
-
-    // A target covers the declaration itself plus members and nested packages, but must not
-    // match names that merely share a prefix (e.g. `User` must not deny `UserIndex`).
-    private fun String?.matchesTarget(prefix: String): Boolean = this == prefix || this?.startsWith("$prefix.") == true
+    private fun decodeGraph(file: File): DependencyGraph =
+        try {
+            KlassTreeJson.decodeFromString(DependencyGraph.serializer(), file.readText())
+        } catch (exception: IllegalArgumentException) {
+            throw GradleException("klass-tree: cannot parse $file: ${exception.message}", exception)
+        }
 
     private fun describe(
+        change: EdgeCountChange,
         edge: GraphEdge,
         nodesById: Map<String, GraphNode>,
     ): String {
         val sites = edge.callSites.joinToString(", ") { "${it.file}:${it.line}" }
-        return "+ ${label(edge.from, nodesById)} -> ${label(edge.to, nodesById)} ${edge.kind}" +
+        return "+ ${label(change.from, nodesById)} -> ${label(change.to, nodesById)} ${change.kind}" +
+            " (${change.baseline} -> ${change.current} call sites)" +
             if (sites.isNotEmpty()) " @ $sites" else ""
-    }
-
-    private fun describe(
-        delta: GraphEdgeDelta,
-        nodesById: Map<String, GraphNode>,
-    ): String {
-        val sites = delta.addedCallSites.joinToString(", ") { "${it.file}:${it.line}" }
-        return "+ ${label(delta.from, nodesById)} -> ${label(delta.to, nodesById)} ${delta.kind} @ $sites"
     }
 
     private fun label(

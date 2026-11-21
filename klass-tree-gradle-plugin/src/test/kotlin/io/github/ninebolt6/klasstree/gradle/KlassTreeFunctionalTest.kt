@@ -518,16 +518,15 @@ class KlassTreeFunctionalTest {
     }
 
     @Test
-    fun `klassTreeBaseline writes the analyzed graph as the baseline`() {
+    fun `klassTreeBaseline writes portable edge counts`() {
         writeProject()
 
-        val result = runner("klassTreeBaseline").build()
+        runner("klassTreeBaseline").build()
 
-        assertTrue(result.task(":klassTree")?.outcome == TaskOutcome.SUCCESS)
-        assertTrue(
-            projectDir.resolve("klass-tree-baseline.json").toFile().readText() ==
-                projectDir.resolve("build/klass-tree/graph.json").toFile().readText(),
-        )
+        val content = projectDir.resolve("klass-tree-baseline.json").toFile().readText()
+        val baseline = Json.parseToJsonElement(content).jsonObject
+        assertEquals(setOf("schemaVersion", "edges"), baseline.keys)
+        assertTrue(baseline.getValue("edges").jsonArray.isNotEmpty())
     }
 
     @Test
@@ -597,11 +596,7 @@ class KlassTreeFunctionalTest {
     @Test
     fun `klassTreeCheck fails on new references to denied targets`() {
         writeProject(klassTreeConfig = """deniedTargets.set(listOf("shared"))""")
-        runner("klassTree").build()
-        Files.copy(
-            projectDir.resolve("build/klass-tree/graph.json"),
-            projectDir.resolve("klass-tree-baseline.json"),
-        )
+        runner("klassTreeBaseline").build()
         write(
             "api/src/main/kotlin/api/New.kt",
             """
@@ -621,11 +616,7 @@ class KlassTreeFunctionalTest {
     @Test
     fun `klassTreeCheck passes when added references are not denied`() {
         writeProject(klassTreeConfig = """deniedTargets.set(listOf("shared.internal"))""")
-        runner("klassTree").build()
-        Files.copy(
-            projectDir.resolve("build/klass-tree/graph.json"),
-            projectDir.resolve("klass-tree-baseline.json"),
-        )
+        runner("klassTreeBaseline").build()
         write(
             "api/src/main/kotlin/api/New.kt",
             """
