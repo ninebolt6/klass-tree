@@ -18,6 +18,8 @@ data class BaselineEdge(
     val to: String,
     val kind: EdgeKind,
     val callSites: Int,
+    val fromFqName: String? = null,
+    val fromPackage: String? = null,
     val toFqName: String? = null,
     val toPackage: String? = null,
 )

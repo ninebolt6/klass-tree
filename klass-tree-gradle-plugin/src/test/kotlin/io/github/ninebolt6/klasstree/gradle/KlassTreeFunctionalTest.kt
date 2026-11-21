@@ -565,7 +565,7 @@ class KlassTreeFunctionalTest {
 
     @Test
     fun `klassTreeCheck ignores references that only share a name prefix with denied targets`() {
-        writeProject(klassTreeConfig = """deniedTargets.set(listOf("shared.Shar"))""")
+        writeProject(klassTreeConfig = """deny(to = "shared.Shar")""")
         runner("klassTreeBaseline").build()
         write(
             "api/src/main/kotlin/api/New.kt",
@@ -585,7 +585,7 @@ class KlassTreeFunctionalTest {
 
     @Test
     fun `klassTreeCheck passes against a baseline written by klassTreeBaseline`() {
-        writeProject(klassTreeConfig = """deniedTargets.set(listOf("shared"))""")
+        writeProject(klassTreeConfig = """deny(to = "shared")""")
 
         runner("klassTreeBaseline").build()
         val result = runner("klassTreeCheck").build()
@@ -595,7 +595,7 @@ class KlassTreeFunctionalTest {
 
     @Test
     fun `klassTreeCheck fails on new references to denied targets`() {
-        writeProject(klassTreeConfig = """deniedTargets.set(listOf("shared"))""")
+        writeProject(klassTreeConfig = """deny(to = "shared")""")
         runner("klassTreeBaseline").build()
         write(
             "api/src/main/kotlin/api/New.kt",
@@ -610,12 +610,12 @@ class KlassTreeFunctionalTest {
 
         val result = runner("klassTreeCheck").buildAndFail()
 
-        assertTrue(result.output.contains("new reference(s) to denied targets"))
+        assertTrue(result.output.contains("new reference(s) violating [* -> shared]"))
     }
 
     @Test
     fun `klassTreeCheck passes when added references are not denied`() {
-        writeProject(klassTreeConfig = """deniedTargets.set(listOf("shared.internal"))""")
+        writeProject(klassTreeConfig = """deny(to = "shared.internal")""")
         runner("klassTreeBaseline").build()
         write(
             "api/src/main/kotlin/api/New.kt",
@@ -636,7 +636,7 @@ class KlassTreeFunctionalTest {
 
     @Test
     fun `klassTreeCheck fails with instructions when the baseline is missing`() {
-        writeProject(klassTreeConfig = """deniedTargets.set(listOf("shared"))""")
+        writeProject(klassTreeConfig = """deny(to = "shared")""")
 
         val result = runner("klassTreeCheck").buildAndFail()
 

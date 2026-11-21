@@ -136,7 +136,7 @@ class KlassTreePlugin : Plugin<Project> {
             checkTask.graphJson.set(task.flatMap { it.outputDirectory.file("graph.json") })
             checkTask.baselineFile.set(extension.baselineFile)
             checkTask.baselineInputs.from(extension.baselineFile)
-            checkTask.deniedTargets.set(extension.deniedTargets)
+            checkTask.deniedDependencies.set(extension.deniedDependencies)
             checkTask.diffFile.set(extension.outputDirectory.file("klass-tree-diff.json"))
             checkTask.dependsOn(task)
             // Ordering, not a dependency: regenerating the baseline must never become a

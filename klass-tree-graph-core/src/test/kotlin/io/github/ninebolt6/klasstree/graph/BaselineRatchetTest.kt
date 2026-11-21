@@ -30,40 +30,46 @@ class BaselineRatchetTest {
         val excluded = listOf("generatedAt", "projectRoot", "nodes", "line", "column", "/checkout")
         assertFalse(excluded.any { "\"$it\"" in json })
         assertEquals(listOf(EdgeKind.FUNCTION_CALL, EdgeKind.TYPE_REFERENCE), baseline.edges.map { it.kind })
-        assertTrue(BaselineRatchet.compare(baseline, shifted, listOf("legacy")).changes.isEmpty())
+        val result = BaselineRatchet.compare(baseline, shifted, listOf(DeniedDependency(to = "legacy")))
+        assertTrue(result.changes.isEmpty())
     }
 
     @Test
     fun `new edges and increased counts violate denied targets`() {
         val baseline = BaselineRatchet.baseline(graph(listOf(edge(1))))
         val current = graph(listOf(edge(2), edge(1).copy(kind = EdgeKind.TYPE_REFERENCE)))
-        val result = BaselineRatchet.compare(baseline, current, listOf("legacy.Old"))
+        val result = BaselineRatchet.compare(baseline, current, listOf(DeniedDependency(to = "legacy.Old")))
 
         assertEquals(listOf(1 to 2, 0 to 1), result.violations.map { it.baseline to it.current })
     }
 
     @Test
-    fun `decreased and removed edges report progress from stored target metadata`() {
+    fun `decreased and removed edges report progress from stored source and target metadata`() {
         val baseline = BaselineRatchet.baseline(graph(listOf(edge(3), edge(2).copy(kind = EdgeKind.TYPE_REFERENCE))))
-        val reduced = BaselineRatchet.compare(baseline, graph(listOf(edge(1))), listOf("legacy.Old"))
+        val rules = listOf(DeniedDependency(from = "a.Main", to = "legacy.Old"))
+        val reduced = BaselineRatchet.compare(baseline, graph(listOf(edge(1))), rules)
         assertEquals(listOf(3 to 1, 2 to 0), reduced.progress.map { it.baseline to it.current })
 
-        val packageBaseline = baseline.copy(edges = baseline.edges.map { it.copy(toFqName = null) })
-        val withoutTarget = graph(emptyList()).copy(nodes = listOf(source))
-        val removed = BaselineRatchet.compare(packageBaseline, withoutTarget, listOf("legacy"))
+        val packageBaseline = baseline.copy(edges = baseline.edges.map { it.copy(fromFqName = null, toFqName = null) })
+        val withoutNodes = graph(emptyList()).copy(nodes = emptyList())
+        val packageRules = listOf(DeniedDependency(from = "a", to = "legacy"))
+        val removed = BaselineRatchet.compare(packageBaseline, withoutNodes, packageRules)
         assertEquals(listOf(3 to 0, 2 to 0), removed.progress.map { it.baseline to it.current })
     }
 
     @Test
-    fun `moved targets use baseline names for progress and current names for violations`() {
+    fun `moved nodes use baseline names for progress and current names for violations`() {
         val baseline = BaselineRatchet.baseline(graph(listOf(edge(3))))
         val movedTarget = target.copy(fqName = null, packageName = "fresh")
-        val moved = graph(listOf(edge(1))).copy(nodes = listOf(source, movedTarget))
-        val reduced = BaselineRatchet.compare(baseline, moved, listOf("legacy.Old"))
+        val movedSource = source.copy(fqName = "fresh.Main", packageName = "fresh")
+        val moved = graph(listOf(edge(1))).copy(nodes = listOf(movedSource, movedTarget))
+        val rules = listOf(DeniedDependency(from = "a.Main", to = "legacy.Old"))
+        val reduced = BaselineRatchet.compare(baseline, moved, rules)
         assertEquals(listOf(3 to 1), reduced.progress.map { it.baseline to it.current })
-        assertTrue(BaselineRatchet.compare(baseline, moved, listOf("fresh")).progress.isEmpty())
+        val freshRules = listOf(DeniedDependency(from = "fresh", to = "fresh"))
+        assertTrue(BaselineRatchet.compare(baseline, moved, freshRules).progress.isEmpty())
 
-        val grown = BaselineRatchet.compare(baseline, moved.copy(edges = listOf(edge(4))), listOf("legacy"))
+        val grown = BaselineRatchet.compare(baseline, moved.copy(edges = listOf(edge(4))), rules)
         assertTrue(grown.violations.isEmpty())
     }
 
@@ -72,17 +78,44 @@ class BaselineRatchetTest {
         val current = graph(listOf(edge(1)))
         val baseline = BaselineRatchet.baseline(graph(emptyList()))
         listOf("legacy", "legacy.Old").forEach {
-            assertEquals(1, BaselineRatchet.compare(baseline, current, listOf(it)).violations.size)
+            val rules = listOf(DeniedDependency(to = it))
+            assertEquals(1, BaselineRatchet.compare(baseline, current, rules).violations.size)
         }
         listOf("leg", "legacy.O", "legacy.Old.Member").forEach {
-            assertTrue(BaselineRatchet.compare(baseline, current, listOf(it)).violations.isEmpty())
+            val rules = listOf(DeniedDependency(to = it))
+            assertTrue(BaselineRatchet.compare(baseline, current, rules).violations.isEmpty())
         }
         val nestedTarget = target.copy(fqName = "legacy.Old.Member", packageName = "legacy.internal")
         val nested = current.copy(nodes = listOf(source, nestedTarget))
-        assertEquals(1, BaselineRatchet.compare(baseline, nested, listOf("legacy.Old")).violations.size)
-        assertEquals(1, BaselineRatchet.compare(baseline, nested, listOf("legacy.internal")).violations.size)
+        val nameRule = listOf(DeniedDependency(to = "legacy.Old"))
+        val packageRule = listOf(DeniedDependency(to = "legacy.internal"))
+        assertEquals(1, BaselineRatchet.compare(baseline, nested, nameRule).violations.size)
+        assertEquals(1, BaselineRatchet.compare(baseline, nested, packageRule).violations.size)
         val userIndex = current.copy(nodes = listOf(source, target.copy(fqName = "legacy.UserIndex")))
-        assertTrue(BaselineRatchet.compare(baseline, userIndex, listOf("legacy.User")).violations.isEmpty())
+        val userRule = listOf(DeniedDependency(to = "legacy.User"))
+        assertTrue(BaselineRatchet.compare(baseline, userIndex, userRule).violations.isEmpty())
+    }
+
+    @Test
+    fun `pair rules require matching source and target prefixes`() {
+        val baseline = BaselineRatchet.baseline(graph(emptyList()))
+        val current = graph(listOf(edge(1)))
+        listOf(null, "a", "a.Main").forEach { from ->
+            val rules = listOf(DeniedDependency(from = from, to = "legacy"))
+            assertEquals(1, BaselineRatchet.compare(baseline, current, rules).violations.size)
+        }
+        listOf("other", "a.Mai", "a.Main.Member").forEach { from ->
+            val rules = listOf(DeniedDependency(from = from, to = "legacy"))
+            assertTrue(BaselineRatchet.compare(baseline, current, rules).violations.isEmpty())
+        }
+        val nestedSource = source.copy(fqName = "a.domain.Main", packageName = "a.internal")
+        val nested = current.copy(nodes = listOf(nestedSource, target))
+        listOf("a", "a.domain", "a.internal").forEach { from ->
+            val rules = listOf(DeniedDependency(from = from, to = "legacy"))
+            assertEquals(1, BaselineRatchet.compare(baseline, nested, rules).violations.size)
+        }
+        val mismatch = listOf(DeniedDependency(from = "a", to = "other"))
+        assertTrue(BaselineRatchet.compare(baseline, current, mismatch).violations.isEmpty())
     }
 
     private fun graph(edges: List<GraphEdge>) =

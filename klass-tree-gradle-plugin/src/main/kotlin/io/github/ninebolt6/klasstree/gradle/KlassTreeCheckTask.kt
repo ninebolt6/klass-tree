@@ -2,6 +2,7 @@ package io.github.ninebolt6.klasstree.gradle
 
 import io.github.ninebolt6.klasstree.graph.BaselineComparison
 import io.github.ninebolt6.klasstree.graph.BaselineRatchet
+import io.github.ninebolt6.klasstree.graph.DeniedDependency
 import io.github.ninebolt6.klasstree.graph.DependencyBaseline
 import io.github.ninebolt6.klasstree.graph.DependencyGraph
 import io.github.ninebolt6.klasstree.graph.EdgeCountChange
@@ -37,7 +38,7 @@ abstract class KlassTreeCheckTask : DefaultTask() {
     abstract val baselineInputs: ConfigurableFileCollection
 
     @get:Input
-    abstract val deniedTargets: ListProperty<String>
+    abstract val deniedDependencies: ListProperty<DeniedDependency>
 
     @get:OutputFile
     abstract val diffFile: RegularFileProperty
@@ -53,7 +54,7 @@ abstract class KlassTreeCheckTask : DefaultTask() {
         }
         val baseline = decodeBaseline(baselinePath)
         val current = decodeGraph(graphJson.get().asFile)
-        val diff = BaselineRatchet.compare(baseline, current, deniedTargets.get())
+        val diff = BaselineRatchet.compare(baseline, current, deniedDependencies.get())
         val file = diffFile.get().asFile
         file.parentFile?.mkdirs()
         file.writeText(KlassTreeJson.encodeToString(BaselineComparison.serializer(), diff))
@@ -72,8 +73,9 @@ abstract class KlassTreeCheckTask : DefaultTask() {
                     describe(change, edge, nodes)
                 }
             val added = diff.violations.sumOf { it.current - it.baseline }
+            val rules = deniedDependencies.get().joinToString { "${it.from ?: "*"} -> ${it.to}" }
             throw GradleException(
-                "klass-tree: $added new reference(s) to denied targets ${deniedTargets.get()}:\n" +
+                "klass-tree: $added new reference(s) violating [$rules]:\n" +
                     violations.joinToString("\n") { "  $it" },
             )
         }

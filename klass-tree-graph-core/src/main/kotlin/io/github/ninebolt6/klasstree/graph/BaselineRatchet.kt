@@ -13,6 +13,8 @@ object BaselineRatchet {
                             to = edge.to,
                             kind = edge.kind,
                             callSites = edge.callSites.size,
+                            fromFqName = nodes[edge.from]?.fqName,
+                            fromPackage = nodes[edge.from]?.packageName,
                             toFqName = nodes[edge.to]?.fqName,
                             toPackage = nodes[edge.to]?.packageName,
                         )
@@ -23,7 +25,7 @@ object BaselineRatchet {
     fun compare(
         baseline: DependencyBaseline,
         current: DependencyGraph,
-        deniedTargets: List<String>,
+        rules: List<DeniedDependency>,
     ): BaselineComparison {
         val previous = baseline.edges.associateBy { Triple(it.from, it.to, it.kind) }
         val present = current.edges.associateBy { Triple(it.from, it.to, it.kind) }
@@ -41,19 +43,31 @@ object BaselineRatchet {
             violations =
                 changes.filter { change ->
                     change.current > change.baseline &&
-                        nodes.getValue(change.to).let { node ->
-                            deniedTargets.any { node.fqName.matchesTarget(it) || node.packageName.matchesTarget(it) }
+                        nodes.getValue(change.to).let { target ->
+                            val source = nodes.getValue(change.from)
+                            rules.any {
+                                it.from.matches(source.fqName, source.packageName) &&
+                                    it.to.matches(target.fqName, target.packageName)
+                            }
                         }
                 },
             progress =
                 changes.filter { change ->
                     change.current < change.baseline &&
                         previous.getValue(Triple(change.from, change.to, change.kind)).let { edge ->
-                            deniedTargets.any { edge.toFqName.matchesTarget(it) || edge.toPackage.matchesTarget(it) }
+                            rules.any {
+                                it.from.matches(edge.fromFqName, edge.fromPackage) &&
+                                    it.to.matches(edge.toFqName, edge.toPackage)
+                            }
                         }
                 },
         )
     }
+
+    private fun String?.matches(
+        fqName: String?,
+        packageName: String?,
+    ): Boolean = this == null || fqName.matchesTarget(this) || packageName.matchesTarget(this)
 
     private fun String?.matchesTarget(prefix: String): Boolean = this == prefix || this?.startsWith("$prefix.") == true
 }

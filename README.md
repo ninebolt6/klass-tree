@@ -86,9 +86,8 @@ klassTree {
     // Default: klass-tree-baseline.json in the root project.
     baselineFile.set(layout.projectDirectory.file("klass-tree-baseline.json"))
 
-    // fqName/package prefixes that must not gain new references relative to the baseline, for
-    // example "com.example.legacy". Existing edges are frozen by the baseline, not denied outright.
-    deniedTargets.set(listOf("com.example.legacy"))
+    deny(to = "com.example.legacy")
+    deny(from = "com.example.domain", to = "com.example.infra")
 }
 ```
 
@@ -106,8 +105,9 @@ Persist `<rootProject>/.gradle/klass-tree/aot/` in CI; otherwise leave caching o
 
 ## Checking dependency regressions
 
-`klassTreeCheck` fails when an edge into `deniedTargets` gains call sites compared with the committed
-baseline. The baseline stores call-site counts per edge, so line shifts do not fail the check.
+`klassTreeCheck` fails when an edge matching a `deny` rule gains call sites compared with the committed
+baseline. Rules match fqName/package prefixes on both ends; omitting `from` matches any source.
+The baseline stores call-site counts per edge, so line shifts do not fail the check.
 Count changes are written to `klass-tree-diff.json`.
 
 ```shell
@@ -121,8 +121,7 @@ Violations show counts and current call sites:
     + a.Main -> legacy.Old FUNCTION_CALL (1 -> 2 call sites) @ Main.kt:5, Main.kt:9
 ```
 
-Existing references never fail and removed ones are reported as progress, so declaring code being
-phased out as a denied target lets CI enforce the ratchet.
+Existing references never fail and removed ones are reported as progress.
 
 ## What is analyzed
 
