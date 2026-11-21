@@ -561,7 +561,6 @@ class KlassTreeFunctionalTest {
 
         assertTrue(result.output.contains("klass-tree: cannot parse"))
         assertTrue(result.output.contains("klass-tree-baseline.json"))
-        assertTrue(result.output.contains("klassTreeBaseline` to regenerate"))
     }
 
     @Test

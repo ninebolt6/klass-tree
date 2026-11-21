@@ -83,11 +83,7 @@ abstract class KlassTreeCheckTask : DefaultTask() {
         try {
             KlassTreeJson.decodeFromString(DependencyBaseline.serializer(), file.readText())
         } catch (exception: IllegalArgumentException) {
-            throw GradleException(
-                "klass-tree: cannot parse baseline $file. " +
-                    "Run `./gradlew klassTreeBaseline` to regenerate it: ${exception.message}",
-                exception,
-            )
+            throw GradleException("klass-tree: cannot parse $file: ${exception.message}", exception)
         }
 
     private fun decodeGraph(file: File): DependencyGraph =
