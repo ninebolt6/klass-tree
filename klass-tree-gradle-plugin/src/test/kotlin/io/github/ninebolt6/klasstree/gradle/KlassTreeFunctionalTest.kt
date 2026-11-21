@@ -6,10 +6,12 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.gradle.testkit.runner.GradleRunner
 import org.gradle.testkit.runner.TaskOutcome
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -211,6 +213,69 @@ class KlassTreeFunctionalTest {
 
         assertTrue(result.output.contains("exit code"))
     }
+
+    @Test
+    fun `AOT cache is ignored with one warning on older Java`() {
+        assumeTrue(Runtime.version().feature() < 25)
+        writeProject(klassTreeConfig = "aotCacheDirectory.set(layout.projectDirectory.dir(\"analyzer-aot\"))")
+
+        val result = runner("klassTree").build()
+
+        assertEquals(1, result.output.lineSequence().count { it.contains("aotCacheDirectory requires Java 25") })
+        assertTrue(result.output.contains("errors=0"))
+        assertFalse(projectDir.resolve("analyzer-aot").toFile().exists())
+    }
+
+    @Test
+    fun `AOT cache trains loads and tolerates a truncated cache with configuration cache`() {
+        val javaHome =
+            listOfNotNull(
+                System.getenv("JDK25_HOME"),
+                System.getenv("JAVA_HOME_25_X64"),
+                System.getProperty("java.home").takeIf { Runtime.version().feature() >= 25 },
+            ).map { Path.of(it) }.firstOrNull { Files.isRegularFile(it.resolve("release")) }
+        assumeTrue(javaHome != null, "JDK 25 not available; set JDK25_HOME to enable AOT functional coverage")
+        writeProject(klassTreeConfig = "aotCacheDirectory.set(layout.projectDirectory.dir(\"analyzer-aot\"))")
+        val arguments =
+            arrayOf(
+                "klassTree",
+                "-Dorg.gradle.java.home=${requireNotNull(javaHome)}",
+                "--info",
+                "--configuration-cache",
+                "--rerun-tasks",
+            )
+
+        val training = runner(*arguments).build()
+        assertTrue(training.output.contains("-XX:AOTCacheOutput="))
+        val graph = normalizedGraph()
+        val cache =
+            Files.list(projectDir.resolve("analyzer-aot")).use { files ->
+                files.filter { it.fileName.toString().endsWith(".aot") }.toList().single()
+            }
+        assertTrue(Files.size(cache) > 0)
+
+        val cached = runner(*arguments).build()
+        assertTrue(cached.output.contains("-XX:AOTCache="))
+        assertTrue(cached.output.contains("Configuration cache entry reused"))
+        assertEquals(graph, normalizedGraph())
+
+        Files.write(cache, byteArrayOf(1, 2, 3))
+        val truncated = runner(*arguments).build()
+        assertTrue(truncated.output.contains("-XX:AOTCache="))
+        assertTrue(truncated.output.contains("errors=0"))
+        assertEquals(graph, normalizedGraph())
+
+        val unchanged =
+            runner("klassTree", "-Dorg.gradle.java.home=$javaHome", "--configuration-cache").build()
+        assertTrue(unchanged.task(":klassTree")?.outcome == TaskOutcome.UP_TO_DATE)
+    }
+
+    private fun normalizedGraph(): String =
+        projectDir
+            .resolve("build/klass-tree/graph.json")
+            .toFile()
+            .readText()
+            .replace(Regex("(?m)^    \\\"generatedAt\\\":.*\\n"), "")
 
     @Test
     fun `klassTree fails when there are no Kotlin sources`() {

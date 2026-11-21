@@ -5,6 +5,7 @@ import io.github.ninebolt6.klasstree.graph.KlassTreeJson
 import kotlinx.serialization.builtins.ListSerializer
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
+import org.gradle.api.JavaVersion
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.ListProperty
@@ -13,12 +14,14 @@ import org.gradle.api.provider.SetProperty
 import org.gradle.api.tasks.Classpath
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
 import java.io.File
+import java.io.IOException
 import javax.inject.Inject
 
 /**
@@ -53,6 +56,9 @@ abstract class KlassTreeTask : DefaultTask() {
 
     @get:Input
     abstract val analyzerJvmArgs: ListProperty<String>
+
+    @get:Internal
+    abstract val aotCacheDirectory: DirectoryProperty
 
     @get:Classpath
     abstract val analysisClasspath: ConfigurableFileCollection
@@ -105,9 +111,12 @@ abstract class KlassTreeTask : DefaultTask() {
         val specFile = File(output, "analysis-spec.json")
         specFile.writeText(KlassTreeJson.encodeToString(AnalysisSpec.serializer(), spec))
 
+        val runtimeClasspath = analysisClasspath + analyzerClasspath
+        val aotArgs = aotJvmArguments(runtimeClasspath.files.toList())
+
         val result =
             execOperations.javaexec { javaexec ->
-                javaexec.classpath = analysisClasspath + analyzerClasspath
+                javaexec.classpath = runtimeClasspath
                 javaexec.mainClass.set("io.github.ninebolt6.klasstree.analyzer.AnalyzerMainKt")
                 javaexec.args(
                     specFile.absolutePath,
@@ -115,6 +124,7 @@ abstract class KlassTreeTask : DefaultTask() {
                     formats.get().sorted().joinToString(","),
                 )
                 analyzerJvmArgs.get().forEach(javaexec::jvmArgs)
+                javaexec.jvmArgs(aotArgs)
                 javaexec.isIgnoreExitValue = true
             }
 
@@ -123,6 +133,28 @@ abstract class KlassTreeTask : DefaultTask() {
                 "klass-tree analyzer failed with exit code ${result.exitValue}. " +
                     "See the analyzer output above for details.",
             )
+        }
+    }
+
+    private fun aotJvmArguments(classpath: List<File>): List<String> {
+        if (!aotCacheDirectory.isPresent) return emptyList()
+        val javaVersion = JavaVersion.current().majorVersion.toInt()
+        return if (javaVersion < AnalyzerAotCache.MIN_JAVA_VERSION) {
+            logger.warn("klass-tree: aotCacheDirectory requires Java 25 or newer; running without an AOT cache.")
+            emptyList()
+        } else {
+            try {
+                AnalyzerAotCache.arguments(
+                    aotCacheDirectory.get().asFile,
+                    classpath,
+                    javaVersion,
+                    listOf("java.runtime.version", "java.vendor", "java.home").map { System.getProperty(it) },
+                    analyzerJvmArgs.get(),
+                )
+            } catch (failure: IOException) {
+                logger.warn("klass-tree: cannot prepare AOT cache; running without it: ${failure.message}")
+                emptyList()
+            }
         }
     }
 }

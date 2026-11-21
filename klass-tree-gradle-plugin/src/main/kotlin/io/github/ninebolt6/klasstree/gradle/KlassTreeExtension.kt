@@ -29,6 +29,7 @@ abstract class KlassTreeExtension
         abstract val analysisApiVersion: Property<String>
         abstract val failOnAnalysisError: Property<Boolean>
         abstract val analyzerJvmArgs: ListProperty<String>
+        abstract val aotCacheDirectory: DirectoryProperty
 
         /**
          * Committed baseline graph that `klassTreeCheck` compares against; written by

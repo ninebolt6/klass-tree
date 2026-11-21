@@ -110,6 +110,7 @@ class KlassTreePlugin : Plugin<Project> {
                 task.outputDirectory.set(extension.outputDirectory)
                 task.formats.set(extension.formats)
                 task.analyzerJvmArgs.set(extension.analyzerJvmArgs)
+                task.aotCacheDirectory.set(extension.aotCacheDirectory)
                 task.analysisClasspath.from(analyzerConfiguration)
                 task.analyzerClasspath.from(PluginClasspath.resolve())
                 task.projectRoot.set(project.rootProject.projectDir.absolutePath)

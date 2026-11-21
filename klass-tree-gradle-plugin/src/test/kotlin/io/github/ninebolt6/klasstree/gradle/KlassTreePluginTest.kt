@@ -5,6 +5,7 @@ import org.gradle.testfixtures.ProjectBuilder
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 
 class KlassTreePluginTest {
@@ -16,6 +17,7 @@ class KlassTreePluginTest {
         val extension = project.extensions.findByType(KlassTreeExtension::class.java)
         assertNotNull(extension)
         assertEquals(false, extension.includeTests.get())
+        assertFalse(extension.aotCacheDirectory.isPresent)
         assertEquals(setOf("json", "dot"), extension.formats.get())
         assertEquals(
             KlassTreeExtension.DEFAULT_ANALYSIS_API_VERSION,
