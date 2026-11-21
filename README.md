@@ -90,6 +90,18 @@ klassTree {
 }
 ```
 
+## Optional analyzer AOT cache (JDK 25+)
+
+```kotlin
+klassTree {
+    aotCache.set(true)
+}
+```
+
+Off by default. Requires a JDK 25+ analyzer JVM (run Gradle on JDK 25+, not just the
+project's compilation toolchain). The first run trains the cache and is slower.
+Persist `<rootProject>/.gradle/klass-tree/aot/` in CI; otherwise leave caching off.
+
 ## Checking dependency regressions
 
 `klassTreeCheck` compares `graph.json` with the committed baseline and fails when new references
