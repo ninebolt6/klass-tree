@@ -29,6 +29,29 @@ class AnalyzerAotCacheTest {
     }
 
     @Test
+    fun `explicit CDS or AOT arguments disable automatic caching`() {
+        val conflicts =
+            listOf(
+                "-Xshare:off",
+                "-Xshare:auto",
+                "-Xshare:on",
+                "-Xshare:dump",
+                "-XX:SharedArchiveFile=custom.jsa",
+                "-XX:SharedClassListFile=classes.lst",
+                "-XX:DumpLoadedClassList=classes.lst",
+                "-XX:AOTCache=custom.aot",
+                "-XX:AOTCacheOutput=custom.aot",
+                "-XX:AOTMode=auto",
+            )
+        conflicts.forEach { argument ->
+            assertTrue(AnalyzerAotCache.hasConflictingArguments(listOf("-Xmx2g", argument)))
+            assertEquals(emptyList(), arguments(jvmArgs = listOf(argument)))
+        }
+        assertFalse(root.resolve("cache").toFile().exists())
+        assertFalse(AnalyzerAotCache.hasConflictingArguments(listOf("-Xmx2g", "-Xlog:aot")))
+    }
+
+    @Test
     fun `Java 25 trains then uses the same cache with optional loading`() {
         val training = arguments()
         assertEquals("-XX:AOTMode=auto", training.first())

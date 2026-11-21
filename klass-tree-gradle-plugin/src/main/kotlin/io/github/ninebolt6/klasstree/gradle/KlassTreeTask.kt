@@ -142,6 +142,9 @@ abstract class KlassTreeTask : DefaultTask() {
         return if (javaVersion < AnalyzerAotCache.MIN_JAVA_VERSION) {
             logger.warn("klass-tree: aotCacheDirectory requires Java 25 or newer; running without an AOT cache.")
             emptyList()
+        } else if (AnalyzerAotCache.hasConflictingArguments(analyzerJvmArgs.get())) {
+            logger.warn("klass-tree: analyzerJvmArgs configures CDS or AOT; ignoring aotCacheDirectory.")
+            emptyList()
         } else {
             try {
                 AnalyzerAotCache.arguments(

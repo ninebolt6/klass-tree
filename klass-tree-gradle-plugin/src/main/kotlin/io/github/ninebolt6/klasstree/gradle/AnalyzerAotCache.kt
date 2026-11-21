@@ -7,6 +7,20 @@ import java.security.MessageDigest
 internal object AnalyzerAotCache {
     const val MIN_JAVA_VERSION = 25
 
+    private val conflictingPrefixes =
+        listOf(
+            "-Xshare:",
+            "-XX:SharedArchiveFile",
+            "-XX:SharedClassListFile",
+            "-XX:DumpLoadedClassList",
+            "-XX:AOTCache",
+            "-XX:AOTCacheOutput",
+            "-XX:AOTMode",
+        )
+
+    fun hasConflictingArguments(jvmArgs: List<String>): Boolean =
+        jvmArgs.any { argument -> conflictingPrefixes.any(argument::startsWith) }
+
     fun arguments(
         directory: File?,
         classpath: List<File>,
@@ -14,7 +28,7 @@ internal object AnalyzerAotCache {
         javaIdentity: List<String>,
         jvmArgs: List<String>,
     ): List<String> {
-        if (directory == null || javaVersion < MIN_JAVA_VERSION) return emptyList()
+        if (directory == null || javaVersion < MIN_JAVA_VERSION || hasConflictingArguments(jvmArgs)) return emptyList()
 
         val digest = MessageDigest.getInstance("SHA-256")
 
