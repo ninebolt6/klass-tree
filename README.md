@@ -116,7 +116,9 @@ feature off. For example (replace `0.1.0` with your klass-tree plugin version):
 - uses: actions/cache@v4
   with:
     path: .gradle/klass-tree-aot
-    key: klass-tree-aot-${{ runner.os }}-${{ runner.arch }}-0.1.0-${{ steps.java.outputs.version }}
+    key: klass-tree-aot-${{ runner.os }}-${{ runner.arch }}-0.1.0-${{ steps.java.outputs.version }}-${{ hashFiles('**/*.gradle.kts', '**/*.gradle', '**/gradle.properties', 'gradle/libs.versions.toml') }}
+    restore-keys: |
+      klass-tree-aot-${{ runner.os }}-${{ runner.arch }}-0.1.0-${{ steps.java.outputs.version }}-
 - run: ./gradlew klassTree
 ```
 
