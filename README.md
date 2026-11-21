@@ -22,6 +22,8 @@ are resolved but no external nodes are emitted.
 klass-tree is built with JDK 25 and targets Java 21 bytecode. `includeBuild` compiles
 from source, so consumers using it also need a JDK 25 toolchain.
 
+Run `nix develop` to enter a shell with the JDK 25 toolchain.
+
 ## Using the plugin
 
 Consume it as an included build:
