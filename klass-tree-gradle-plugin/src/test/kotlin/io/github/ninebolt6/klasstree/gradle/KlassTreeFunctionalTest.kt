@@ -235,7 +235,13 @@ class KlassTreeFunctionalTest {
                 System.getProperty("java.home").takeIf { Runtime.version().feature() >= 25 },
             ).map { Path.of(it) }.firstOrNull { Files.isRegularFile(it.resolve("release")) }
         assumeTrue(javaHome != null, "JDK 25 not available; set JDK25_HOME to enable AOT functional coverage")
-        writeProject(klassTreeConfig = "aotCacheDirectory.set(layout.projectDirectory.dir(\"analyzer-aot\"))")
+        writeProject(
+            klassTreeConfig =
+                """
+                aotCacheDirectory.set(layout.projectDirectory.dir("analyzer-aot"))
+                analyzerJvmArgs.add("-Xlog:aot")
+                """.trimIndent(),
+        )
         val arguments =
             arrayOf(
                 "klassTree",
@@ -256,6 +262,7 @@ class KlassTreeFunctionalTest {
 
         val cached = runner(*arguments).build()
         assertTrue(cached.output.contains("-XX:AOTCache="))
+        assertTrue(cached.output.contains("Opened AOT cache"))
         assertTrue(cached.output.contains("Configuration cache entry reused"))
         assertEquals(graph, normalizedGraph())
 
