@@ -187,19 +187,12 @@ class KlassTreePlugin : Plugin<Project> {
         }
 
         val sourceDirectories = projectScans.values.flatMap { it.sourceDirectories }
-        val mainSourceDirectories =
-            projectScans
-                .mapValues { (_, scan) ->
-                    scan.moduleTasks
-                        .map { it.get() }
-                        .filter { it.sourceSetName.get() == "main" }
-                        .flatMap { it.sourceDirectories.files }
-                }
         val sourceProjectPaths =
-            project.providers
-                .of(SourceProjectsValueSource::class.java) {
-                    it.parameters.sourceDirectories.set(mainSourceDirectories)
-                }.get()
+            projectScans
+                .filterValues { scan ->
+                    scan.moduleTasks.any { it.get().sourceSetName.get() == "main" }
+                }.keys
+                .toList()
         val moduleSpecOutputs =
             projectScans.values
                 .flatMap { it.moduleTasks }

@@ -51,7 +51,15 @@ abstract class KlassTreeModuleSpecTask : DefaultTask() {
 
     @TaskAction
     fun writeModuleSpec() {
-        val sourceRoots = sourceRoots(sourceDirectories.files)
+        val sourceRoots =
+            sourceDirectories.files
+                .filter { it.isDirectory }
+                .filter { directory ->
+                    directory.walkTopDown().any { it.isFile && (it.extension == "kt" || it.extension == "java") }
+                }.map { it.canonicalFile }
+                .distinct()
+                .sortedBy { it.absolutePath }
+                .map { it.absolutePath }
         val candidates =
             if (sourceRoots.isEmpty()) {
                 emptyList()

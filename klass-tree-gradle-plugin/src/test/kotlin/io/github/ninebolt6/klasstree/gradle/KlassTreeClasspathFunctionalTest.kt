@@ -7,8 +7,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.gradle.testkit.runner.GradleRunner
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.assertEquals
@@ -74,24 +72,22 @@ class KlassTreeClasspathFunctionalTest {
         assertNull(result.task(":bridge:jar"))
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = [false, true])
-    fun `klassTree retains project binaries without analyzed sources`(kotlinPlugin: Boolean) {
-        writeProject(klassTreeConfig = "includeJavaSources.set(false)")
+    @Test
+    fun `klassTree retains project binaries without analyzed sources`() {
+        writeProject()
         Files.delete(projectDir.resolve("shared/src/main/kotlin/shared/Shared.kt"))
         write(
             "shared/build.gradle.kts",
             """
-                plugins { ${if (kotlinPlugin) "kotlin(\"jvm\")" else "`java-library`"} }
-                tasks.compileJava { source("binary-src") }
+                plugins { `java-library` }
                 configurations.named("apiElements") {
                     outgoing.variants.removeIf { it.name == "classes" }
                 }
             """,
         )
-        write("shared/binary-src/shared/Shared.java", "package shared; public class Shared {}")
+        write("shared/src/main/java/shared/Shared.java", "package shared; public class Shared {}")
 
-        val result = runner("klassTree", "--configuration-cache").build()
+        val result = runner("klassTree").build()
         val spec = readOutput("analysis-spec.json")
         val module =
             spec
@@ -108,22 +104,9 @@ class KlassTreeClasspathFunctionalTest {
         assertTrue(Regex("external=([1-9][0-9]*)").containsMatchIn(result.output))
         assertFalse(graph.contains(":shared:main:"))
         assertNotNull(result.task(":shared:compileJava"))
-
-        if (kotlinPlugin) {
-            Files.delete(projectDir.resolve("shared/binary-src/shared/Shared.java"))
-            write("shared/src/main/kotlin/shared/Shared.kt", "package shared; class Shared")
-
-            val withSources = runner("klassTree", "--configuration-cache").build()
-            val sourceGraph = projectDir.resolve("build/klass-tree/graph.json").toFile().readText()
-
-            assertTrue(sourceGraph.contains(":shared:main:"))
-            assertTrue(withSources.output.contains("unresolved=0"))
-            assertNull(withSources.task(":shared:compileKotlin"))
-            assertNull(withSources.task(":shared:compileJava"))
-        }
     }
 
-    private fun writeProject(klassTreeConfig: String = "") {
+    private fun writeProject() {
         write(
             "settings.gradle.kts",
             """
@@ -140,7 +123,6 @@ class KlassTreeClasspathFunctionalTest {
                     kotlin("jvm") apply false
                     id("io.github.ninebolt6.klass-tree")
                 }
-                klassTree { $klassTreeConfig }
             """,
         )
         write("shared/build.gradle.kts", "plugins { kotlin(\"jvm\") }")

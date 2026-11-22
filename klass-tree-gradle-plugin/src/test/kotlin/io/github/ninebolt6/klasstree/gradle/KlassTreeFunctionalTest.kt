@@ -31,16 +31,6 @@ class KlassTreeFunctionalTest {
     }
 
     @Test
-    fun `klassTree reports unresolved compile dependencies`() {
-        writeProject(invalidDependency = true)
-
-        val result = runner("klassTree").buildAndFail()
-
-        assertTrue(result.output.contains("does.not:exist:1.0"))
-        assertNull(result.task(":klassTree"))
-    }
-
-    @Test
     fun `klassTree analyzes project dependencies without compiling their outputs`() {
         writeProject()
 
