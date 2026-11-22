@@ -19,16 +19,19 @@ are resolved but no external nodes are emitted.
 
 ## Using the plugin
 
-Consume it as an included build:
-
 `settings.gradle.kts`:
 
 ```kotlin
 pluginManagement {
-    includeBuild("../klass-tree")
     repositories {
         mavenCentral()
         gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    repositories {
+        mavenCentral()
     }
 }
 ```
@@ -38,7 +41,7 @@ Root `build.gradle.kts`:
 ```kotlin
 plugins {
     kotlin("jvm") version "2.5.0-RC" apply false
-    id("io.github.ninebolt6.klass-tree")
+    id("io.github.ninebolt6.klass-tree") version "0.1.0"
 }
 ```
 
@@ -248,8 +251,7 @@ analyzes two modules (`api` depends on `shared`). Use `-PklassTreeTests=true` to
 
 ## Development
 
-klass-tree is built with JDK 25 and targets Java 21 bytecode. `includeBuild` compiles
-from source, so consumers using it also need a JDK 25 toolchain.
+klass-tree is built with JDK 25 and targets Java 21 bytecode.
 
 Run `nix develop` to enter a shell with the JDK 25 toolchain.
 
