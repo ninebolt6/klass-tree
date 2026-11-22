@@ -1,3 +1,5 @@
+import com.vanniktech.maven.publish.MavenPublishBaseExtension
+
 plugins {
     alias(libs.plugins.kotlin.jvm) apply false
     alias(libs.plugins.kotlin.serialization) apply false
@@ -51,6 +53,12 @@ tasks.register<JavaExec>("ktlintFormat") {
 subprojects {
     apply(plugin = "dev.detekt")
     apply(plugin = "com.vanniktech.maven.publish")
+
+    extensions.configure<MavenPublishBaseExtension> {
+        pom {
+            name.set(project.name)
+        }
+    }
 
     tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
         compilerOptions {
