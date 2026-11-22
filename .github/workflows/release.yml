@@ -4,15 +4,15 @@ on:
   push:
     tags: ["v*"]
 
-permissions:
-  contents: read
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   publish:
+    environment: release
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -45,3 +45,17 @@ jobs:
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_IN_MEMORY_KEY_PASSWORD }}
           GRADLE_PUBLISH_KEY: ${{ secrets.GRADLE_PUBLISH_KEY }}
           GRADLE_PUBLISH_SECRET: ${{ secrets.GRADLE_PUBLISH_SECRET }}
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          assets=()
+          for module in klass-tree-graph-core klass-tree-graph-dot klass-tree-analyzer klass-tree-gradle-plugin; do
+            jar="$module/build/libs/$module-$version.jar"
+            test -f "$jar"
+            assets+=("$jar")
+          done
+          gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --draft "${assets[@]}"
+          gh release edit "$GITHUB_REF_NAME" --draft=false
