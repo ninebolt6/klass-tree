@@ -22,12 +22,14 @@ import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
+import org.gradle.work.DisableCachingByDefault
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
 import javax.inject.Inject
 
 // Analysis API and IntelliJ classes must not be loaded into the Gradle daemon.
+@DisableCachingByDefault(because = "Graph output contains absolute paths and generation timestamps")
 abstract class KlassTreeTask : DefaultTask() {
     @get:InputFiles
     @get:PathSensitive(PathSensitivity.NONE)

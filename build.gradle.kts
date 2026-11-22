@@ -1,12 +1,15 @@
+import com.vanniktech.maven.publish.MavenPublishBaseExtension
+
 plugins {
     alias(libs.plugins.kotlin.jvm) apply false
     alias(libs.plugins.kotlin.serialization) apply false
     alias(libs.plugins.detekt) apply false
+    alias(libs.plugins.maven.publish) apply false
 }
 
 allprojects {
-    group = "io.github.ninebolt6.klass-tree"
-    version = "0.1.0-SNAPSHOT"
+    group = providers.gradleProperty("GROUP").get()
+    version = providers.gradleProperty("VERSION_NAME").get()
 }
 
 val ktlintCli = configurations.create("ktlintCli")
@@ -49,6 +52,13 @@ tasks.register<JavaExec>("ktlintFormat") {
 
 subprojects {
     apply(plugin = "dev.detekt")
+    apply(plugin = "com.vanniktech.maven.publish")
+
+    extensions.configure<MavenPublishBaseExtension> {
+        pom {
+            name.set(project.name)
+        }
+    }
 
     tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
         compilerOptions {
