@@ -12,7 +12,8 @@ are resolved but no external nodes are emitted.
 ## Requirements
 
 - JDK 21+ runtime;
-- Gradle 9.x;
+- Gradle 8.14+;
+- Kotlin Gradle plugin 2.3+;
 - The Kotlin JVM Gradle plugin on the **root buildscript classpath** — the plugin uses KGP API
   types, so it must be declared even if only with `apply false`;
 - `mavenCentral()` so the isolated `klassTreeAnalyzer` configuration can resolve the Analysis API.

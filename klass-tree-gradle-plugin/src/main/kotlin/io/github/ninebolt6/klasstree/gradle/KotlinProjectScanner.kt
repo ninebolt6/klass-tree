@@ -1,11 +1,13 @@
 package io.github.ninebolt6.klasstree.gradle
 
+import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.api.artifacts.ProjectDependency
 import org.gradle.api.artifacts.component.ProjectComponentIdentifier
 import org.gradle.api.tasks.TaskProvider
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmExtension
+import org.jetbrains.kotlin.gradle.plugin.KotlinBasePlugin
 import org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType
 import java.io.File
 
@@ -17,6 +19,8 @@ internal data class KotlinProjectScan(
 // Kotlin Gradle plugin API classes may be absent until the consuming build applies that plugin.
 @OptIn(ExperimentalKotlinGradlePluginApi::class)
 internal object KotlinProjectScanner {
+    private val minimumKgpVersion = KotlinVersion(2, 3)
+
     fun configureProject(
         project: Project,
         includeTests: Boolean,
@@ -24,6 +28,7 @@ internal object KotlinProjectScanner {
     ): KotlinProjectScan {
         val kotlin =
             if (project.plugins.hasPlugin("org.jetbrains.kotlin.jvm")) {
+                requireSupportedVersion(project)
                 project.extensions.findByType(KotlinJvmExtension::class.java)
             } else {
                 null
@@ -78,6 +83,14 @@ internal object KotlinProjectScanner {
             moduleTasks += moduleTask
         }
         return KotlinProjectScan(sourceDirectories.toList(), moduleTasks)
+    }
+
+    private fun requireSupportedVersion(project: Project) {
+        val version = (project.plugins.getPlugin("org.jetbrains.kotlin.jvm") as KotlinBasePlugin).pluginVersion
+        val (major, minor) = version.split('.').take(2).map(String::toInt)
+        if (KotlinVersion(major, minor) < minimumKgpVersion) {
+            throw GradleException("klass-tree requires Kotlin Gradle plugin 2.3 or newer; detected $version.")
+        }
     }
 
     private fun sourceDirectories(
