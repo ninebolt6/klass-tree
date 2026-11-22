@@ -33,6 +33,7 @@ internal object KotlinProjectScanner {
             } else {
                 null
             } ?: return KotlinProjectScan(emptyList(), emptyList())
+        val buildPath = project.rootProject.buildTreePath
         val modules =
             kotlin.target.compilations
                 .filter { it.platformType == KotlinPlatformType.jvm }
@@ -62,11 +63,16 @@ internal object KotlinProjectScanner {
                             task.projectDependencyPaths.set(projectDependencyPaths)
                             task.associatedModuleIds.set(associatedModuleIds)
                             task.sourceDirectories.from(directories)
+                            val sourceProjectPaths = task.sourceProjectPaths
                             task.classpath.from(
                                 dependencyConfiguration.map { configuration ->
                                     configuration.incoming
                                         .artifactView { view ->
-                                            view.componentFilter { id -> id !is ProjectComponentIdentifier }
+                                            view.componentFilter { id ->
+                                                id !is ProjectComponentIdentifier ||
+                                                    id.build.buildPath != buildPath ||
+                                                    id.projectPath !in sourceProjectPaths.get()
+                                            }
                                         }.files
                                 },
                             )

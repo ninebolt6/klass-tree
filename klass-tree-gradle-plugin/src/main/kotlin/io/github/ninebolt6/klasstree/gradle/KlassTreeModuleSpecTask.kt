@@ -33,6 +33,9 @@ abstract class KlassTreeModuleSpecTask : DefaultTask() {
     abstract val projectDependencyPaths: ListProperty<String>
 
     @get:Input
+    abstract val sourceProjectPaths: ListProperty<String>
+
+    @get:Input
     abstract val associatedModuleIds: ListProperty<String>
 
     @get:InputFiles
@@ -48,15 +51,7 @@ abstract class KlassTreeModuleSpecTask : DefaultTask() {
 
     @TaskAction
     fun writeModuleSpec() {
-        val sourceRoots =
-            sourceDirectories.files
-                .filter { it.isDirectory }
-                .filter { directory ->
-                    directory.walkTopDown().any { it.isFile && (it.extension == "kt" || it.extension == "java") }
-                }.map { it.canonicalFile }
-                .distinct()
-                .sortedBy { it.absolutePath }
-                .map { it.absolutePath }
+        val sourceRoots = sourceRoots(sourceDirectories.files)
         val candidates =
             if (sourceRoots.isEmpty()) {
                 emptyList()
