@@ -9,7 +9,6 @@ import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmExtension
 import org.jetbrains.kotlin.gradle.plugin.KotlinBasePlugin
 import org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType
-import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
 import java.io.File
 
 internal data class KotlinProjectScan(
@@ -27,9 +26,9 @@ internal object KotlinProjectScanner {
         includeTests: Boolean,
         includeJavaSources: Boolean,
     ): KotlinProjectScan {
-        requireSupportedVersion(project)
         val kotlin =
             if (project.plugins.hasPlugin("org.jetbrains.kotlin.jvm")) {
+                requireSupportedVersion(project)
                 project.extensions.findByType(KotlinJvmExtension::class.java)
             } else {
                 null
@@ -89,9 +88,7 @@ internal object KotlinProjectScanner {
     private fun requireSupportedVersion(project: Project) {
         val version = (project.plugins.getPlugin("org.jetbrains.kotlin.jvm") as KotlinBasePlugin).pluginVersion
         val (major, minor) = version.split('.').take(2).map(String::toInt)
-        val hasGeneratedKotlin =
-            KotlinSourceSet::class.java.methods.any { it.name == "getGeneratedKotlin" && it.parameterCount == 0 }
-        if (KotlinVersion(major, minor) < minimumKgpVersion || !hasGeneratedKotlin) {
+        if (KotlinVersion(major, minor) < minimumKgpVersion) {
             throw GradleException("klass-tree requires Kotlin Gradle plugin 2.3 or newer; detected $version.")
         }
     }
