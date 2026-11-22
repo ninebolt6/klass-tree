@@ -1,5 +1,3 @@
-import com.vanniktech.maven.publish.MavenPublishBaseExtension
-
 plugins {
     alias(libs.plugins.kotlin.jvm) apply false
     alias(libs.plugins.kotlin.serialization) apply false
@@ -8,7 +6,7 @@ plugins {
 }
 
 allprojects {
-    group = "io.github.ninebolt6.klass-tree"
+    group = providers.gradleProperty("GROUP").get()
     version = providers.gradleProperty("VERSION_NAME").get()
 }
 
@@ -53,38 +51,6 @@ tasks.register<JavaExec>("ktlintFormat") {
 subprojects {
     apply(plugin = "dev.detekt")
     apply(plugin = "com.vanniktech.maven.publish")
-
-    extensions.configure<MavenPublishBaseExtension> {
-        publishToMavenCentral(automaticRelease = true)
-        signAllPublications()
-        pom {
-            name.set(project.name)
-            description.set("Source-level Kotlin dependency graphs for Kotlin JVM projects.")
-            url.set("https://github.com/ninebolt6/klass-tree")
-            licenses {
-                license {
-                    name.set("Apache-2.0")
-                    url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
-                }
-            }
-            developers {
-                developer {
-                    id.set("ninebolt6")
-                    name.set("ninebolt6")
-                    url.set("https://github.com/ninebolt6")
-                }
-            }
-            scm {
-                url.set("https://github.com/ninebolt6/klass-tree")
-                connection.set("scm:git:https://github.com/ninebolt6/klass-tree.git")
-                developerConnection.set("scm:git:ssh://git@github.com/ninebolt6/klass-tree.git")
-            }
-        }
-    }
-
-    extensions.configure<SigningExtension> {
-        setRequired(providers.gradleProperty("signingInMemoryKey").isPresent)
-    }
 
     tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
         compilerOptions {

@@ -4,10 +4,6 @@ on:
   push:
     tags: ["v*"]
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   publish:
     environment: release
@@ -33,6 +29,7 @@ jobs:
       - name: Publish to Maven Central
         run: ./gradlew publishToMavenCentral
         env:
+          ORG_GRADLE_PROJECT_signAllPublications: true
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_IN_MEMORY_KEY }}
@@ -41,6 +38,7 @@ jobs:
       - name: Publish to Gradle Plugin Portal
         run: ./gradlew publishPlugins
         env:
+          ORG_GRADLE_PROJECT_signAllPublications: true
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_IN_MEMORY_KEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_IN_MEMORY_KEY_PASSWORD }}
           GRADLE_PUBLISH_KEY: ${{ secrets.GRADLE_PUBLISH_KEY }}
@@ -49,13 +47,4 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          assets=()
-          for module in klass-tree-graph-core klass-tree-graph-dot klass-tree-analyzer klass-tree-gradle-plugin; do
-            jar="$module/build/libs/$module-$version.jar"
-            test -f "$jar"
-            assets+=("$jar")
-          done
-          gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --draft "${assets[@]}"
-          gh release edit "$GITHUB_REF_NAME" --draft=false
+        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes
