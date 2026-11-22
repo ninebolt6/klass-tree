@@ -1,12 +1,15 @@
 package io.github.ninebolt6.klasstree.gradle
 
+import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.api.artifacts.ProjectDependency
 import org.gradle.api.artifacts.component.ProjectComponentIdentifier
 import org.gradle.api.tasks.TaskProvider
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmExtension
+import org.jetbrains.kotlin.gradle.plugin.KotlinBasePlugin
 import org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType
+import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
 import java.io.File
 
 internal data class KotlinProjectScan(
@@ -17,11 +20,14 @@ internal data class KotlinProjectScan(
 // Kotlin Gradle plugin API classes may be absent until the consuming build applies that plugin.
 @OptIn(ExperimentalKotlinGradlePluginApi::class)
 internal object KotlinProjectScanner {
+    private val minimumKgpVersion = KotlinVersion(2, 3)
+
     fun configureProject(
         project: Project,
         includeTests: Boolean,
         includeJavaSources: Boolean,
     ): KotlinProjectScan {
+        requireSupportedVersion(project)
         val kotlin =
             if (project.plugins.hasPlugin("org.jetbrains.kotlin.jvm")) {
                 project.extensions.findByType(KotlinJvmExtension::class.java)
@@ -78,6 +84,16 @@ internal object KotlinProjectScanner {
             moduleTasks += moduleTask
         }
         return KotlinProjectScan(sourceDirectories.toList(), moduleTasks)
+    }
+
+    private fun requireSupportedVersion(project: Project) {
+        val version = (project.plugins.getPlugin("org.jetbrains.kotlin.jvm") as KotlinBasePlugin).pluginVersion
+        val (major, minor) = version.split('.').take(2).map(String::toInt)
+        val hasGeneratedKotlin =
+            KotlinSourceSet::class.java.methods.any { it.name == "getGeneratedKotlin" && it.parameterCount == 0 }
+        if (KotlinVersion(major, minor) < minimumKgpVersion || !hasGeneratedKotlin) {
+            throw GradleException("klass-tree requires Kotlin Gradle plugin 2.3 or newer; detected $version.")
+        }
     }
 
     private fun sourceDirectories(

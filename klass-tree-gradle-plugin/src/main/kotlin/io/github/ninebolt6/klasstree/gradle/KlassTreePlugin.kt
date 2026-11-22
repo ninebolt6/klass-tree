@@ -178,10 +178,16 @@ class KlassTreePlugin : Plugin<Project> {
         }
 
         scannerError?.let { error ->
+            val guidance =
+                if (error is NoClassDefFoundError) {
+                    "Declare the Kotlin JVM plugin on the root buildscript classpath, for " +
+                        "example with `plugins { kotlin(\"jvm\") version \"...\" apply false }`."
+                } else {
+                    "Check that the consumer's Kotlin Gradle plugin API is compatible."
+                }
             throw GradleException(
                 "klass-tree could not access the Kotlin Gradle plugin API (${error.message}). " +
-                    "Declare the Kotlin JVM plugin on the root buildscript classpath, for " +
-                    "example with `plugins { kotlin(\"jvm\") version \"...\" apply false }`.",
+                    guidance,
                 error,
             )
         }
