@@ -155,7 +155,7 @@ class AnalyzerTest {
     }
 
     @Test
-    fun `produces every supported edge kind`() {
+    fun `resolves inheritance annotations properties callable references operators and type aliases`() {
         val source = """
             package com.example
 

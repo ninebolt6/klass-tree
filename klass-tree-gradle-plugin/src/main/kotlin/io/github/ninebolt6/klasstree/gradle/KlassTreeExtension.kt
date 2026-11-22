@@ -9,9 +9,6 @@ import org.gradle.api.provider.Property
 import org.gradle.api.provider.SetProperty
 import javax.inject.Inject
 
-/**
- * Configuration for the `klassTree` task.
- */
 abstract class KlassTreeExtension
     @Inject
     constructor(
@@ -20,7 +17,6 @@ abstract class KlassTreeExtension
         abstract val includeTests: Property<Boolean>
         abstract val includeJavaSources: Property<Boolean>
 
-        /** `json` is always written; `dot` is derived from the JSON output. */
         abstract val formats: SetProperty<String>
 
         abstract val outputDirectory: DirectoryProperty
@@ -29,10 +25,6 @@ abstract class KlassTreeExtension
         abstract val analyzerJvmArgs: ListProperty<String>
         abstract val aotCache: Property<Boolean>
 
-        /**
-         * Committed baseline graph that `klassTreeCheck` compares against; written by
-         * `klassTreeBaseline` and checked into version control.
-         */
         abstract val baselineFile: RegularFileProperty
 
         abstract val deniedDependencies: ListProperty<DeniedDependency>

@@ -52,7 +52,9 @@ class GraphDifferTest {
     }
 
     @Test
-    fun `added and removed nodes and edges are reported`() {
+    fun `node and edge additions and removals are deterministic`() {
+        val d = node("d.D")
+        val e = node("e.E")
         val baseline =
             graph(
                 listOf(a, b, c),
@@ -63,18 +65,22 @@ class GraphDifferTest {
             )
         val current =
             graph(
-                listOf(a, b),
+                listOf(a, d, e),
                 listOf(
-                    edge(a.id, c.id, EdgeKind.CONSTRUCTOR_CALL),
+                    edge(a.id, d.id, EdgeKind.CONSTRUCTOR_CALL),
+                    edge(d.id, e.id, EdgeKind.TYPE_REFERENCE),
                 ),
             )
 
         val diff = GraphDiffer.diff(baseline, current)
 
-        assertEquals(listOf("c.C"), diff.removedNodes.map { it.fqName })
-        assertTrue(diff.addedNodes.isEmpty())
+        assertEquals(listOf("b.B", "c.C"), diff.removedNodes.map { it.fqName })
+        assertEquals(listOf("d.D", "e.E"), diff.addedNodes.map { it.fqName })
         assertEquals(
-            listOf(Triple(a.id, c.id, EdgeKind.CONSTRUCTOR_CALL)),
+            listOf(
+                Triple(a.id, d.id, EdgeKind.CONSTRUCTOR_CALL),
+                Triple(d.id, e.id, EdgeKind.TYPE_REFERENCE),
+            ),
             diff.addedEdges.map { Triple(it.from, it.to, it.kind) },
         )
         assertEquals(
@@ -83,6 +89,13 @@ class GraphDifferTest {
                 Triple(b.id, c.id, EdgeKind.TYPE_REFERENCE),
             ),
             diff.removedEdges.map { Triple(it.from, it.to, it.kind) }.toSet(),
+        )
+        assertEquals(
+            diff,
+            GraphDiffer.diff(
+                baseline.copy(nodes = baseline.nodes.reversed(), edges = baseline.edges.reversed()),
+                current.copy(nodes = current.nodes.reversed(), edges = current.edges.reversed()),
+            ),
         )
     }
 
@@ -106,28 +119,5 @@ class GraphDifferTest {
         val delta = diff.edgeDeltas.single()
         assertEquals(listOf(site(9)), delta.addedCallSites)
         assertEquals(listOf(site(7)), delta.removedCallSites)
-    }
-
-    @Test
-    fun `diff output is deterministic regardless of input order`() {
-        val baseline =
-            graph(
-                listOf(b, a, c),
-                listOf(edge(b.id, c.id, EdgeKind.TYPE_REFERENCE), edge(a.id, b.id, EdgeKind.FUNCTION_CALL)),
-            )
-        val current =
-            graph(
-                listOf(c, a),
-                listOf(edge(a.id, c.id, EdgeKind.CONSTRUCTOR_CALL)),
-            )
-
-        val first = GraphDiffer.diff(baseline, current)
-        val second = GraphDiffer.diff(current.copy(nodes = current.nodes.reversed()), baseline)
-
-        assertEquals(
-            listOf("b.B"),
-            first.removedNodes.map { it.fqName },
-        )
-        assertEquals(first.addedEdges.map { it.kind }, second.removedEdges.map { it.kind })
     }
 }

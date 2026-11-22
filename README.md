@@ -17,19 +17,13 @@ are resolved but no external nodes are emitted.
   types, so it must be declared even if only with `apply false`;
 - `mavenCentral()` so the isolated `klassTreeAnalyzer` configuration can resolve the Analysis API.
 
-## Development
-
-klass-tree is built with JDK 25 and targets Java 21 bytecode. `includeBuild` compiles
-from source, so consumers using it also need a JDK 25 toolchain.
-
-Run `nix develop` to enter a shell with the JDK 25 toolchain.
-
 ## Using the plugin
 
 Consume it as an included build:
 
+`settings.gradle.kts`:
+
 ```kotlin
-// settings.gradle.kts
 pluginManagement {
     includeBuild("../klass-tree")
     repositories {
@@ -39,8 +33,9 @@ pluginManagement {
 }
 ```
 
+Root `build.gradle.kts`:
+
 ```kotlin
-// build.gradle.kts (root project)
 plugins {
     kotlin("jvm") version "2.5.0-Beta2" apply false
     id("io.github.ninebolt6.klass-tree")
@@ -48,7 +43,7 @@ plugins {
 ```
 
 Apply `org.jetbrains.kotlin.jvm` to every project that should be analyzed. The plugin must be
-applied to the root project; applying it elsewhere fails with an explicit error.
+applied to the root project.
 
 ```shell
 ./gradlew klassTree
@@ -56,34 +51,19 @@ applied to the root project; applying it elsewhere fails with an explicit error.
 
 ## Configuration
 
+Defaults are shown below. `formats` must be a non-empty subset of `json` and `dot`; JSON is
+always written. Disabling Java sources loses Java-originated edges. `analyzerJvmArgs` applies
+to the forked analyzer, for example `listOf("-Xmx2g")`.
+
 ```kotlin
 klassTree {
-    // Analyze test source sets in addition to main. Default: false.
     includeTests.set(false)
-
-    // Analyze .java files alongside Kotlin sources. Default: true. Disable only to fall back to
-    // Kotlin-only analysis; mixed codebases silently lose Java-originated edges when off.
     includeJavaSources.set(true)
-
-    // Non-empty subset of "json" and "dot". JSON is always written because DOT is rendered from
-    // it. Default: ["json", "dot"].
     formats.set(setOf("json", "dot"))
-
-    // Directory receiving graph.json, graph.dot, and the intermediate analysis-spec.json.
-    // Default: build/klass-tree.
     outputDirectory.set(layout.buildDirectory.dir("klass-tree"))
-
-    // Version of org.jetbrains.kotlin:kotlin-analysis-api used by the forked analyzer.
     analysisApiVersion.set("2.5.0-Beta2")
-
-    // Fail the build when any file or reference could not be analyzed. Default: false.
     failOnAnalysisError.set(false)
-
-    // Extra JVM arguments for the forked analyzer process, for example ["-Xmx2g"]. Default: [].
     analyzerJvmArgs.set(emptyList())
-
-    // Baseline graph that klassTreeCheck compares against, written by klassTreeBaseline.
-    // Default: klass-tree-baseline.json in the root project.
     baselineFile.set(layout.projectDirectory.file("klass-tree-baseline.json"))
 
     deny(to = "com.example.legacy")
@@ -110,9 +90,11 @@ baseline. Rules match fqName/package prefixes on both ends; omitting `from` matc
 The baseline stores call-site counts per edge, so line shifts do not fail the check.
 Count changes are written to `klass-tree-diff.json`.
 
+Record and commit the baseline, then run the check in CI:
+
 ```shell
-./gradlew klassTreeBaseline   # 1. record current counts; commit the baseline
-./gradlew klassTreeCheck      # 2. run in CI from then on
+./gradlew klassTreeBaseline
+./gradlew klassTreeCheck
 ```
 
 Violations show counts and current call sites:
@@ -121,7 +103,7 @@ Violations show counts and current call sites:
     + a.Main -> legacy.Old FUNCTION_CALL (1 -> 2 call sites) @ Main.kt:5, Main.kt:9
 ```
 
-Existing references never fail and removed ones are reported as progress.
+Removed references are reported as progress.
 
 ## What is analyzed
 
@@ -212,7 +194,7 @@ analyzer's run summary instead.
         }
       ]
     }
-  ],
+  ]
 }
 ```
 
@@ -244,17 +226,16 @@ Data flow:
 ## Example
 
 `example/` is a standalone build that consumes the plugin through `includeBuild("..")` and
-analyzes two modules (`api` depends on `shared`).
+analyzes two modules (`api` depends on `shared`). Use `-PklassTreeTests=true` to include test sources.
 
 ```shell
-./gradlew -p example klassTree                    # main sources
-./gradlew -p example klassTree -PklassTreeTests=true  # include test sources
+./gradlew -p example klassTree
+./gradlew -p example klassTree -PklassTreeTests=true
 ```
 
 ## Limitations
 
 - Kotlin JVM only (Kotlin Multiplatform, Android, and other platforms are not supported). Java
-  sources in the analyzed source sets are included unless `includeJavaSources` is off; Java
   language constructs without a Kotlin edge-kind equivalent (e.g. static-initializer reads) map
   to the closest kind.
 - Project dependencies map to the target project's `main` module. Dependencies on projects from
@@ -267,9 +248,14 @@ analyzes two modules (`api` depends on `shared`).
 
 ## Development
 
+klass-tree is built with JDK 25 and targets Java 21 bytecode. `includeBuild` compiles
+from source, so consumers using it also need a JDK 25 toolchain.
+
+Run `nix develop` to enter a shell with the JDK 25 toolchain.
+
 ```shell
-./gradlew build          # compile, test, and check all modules
-./gradlew :klass-tree-analyzer:test # analyzer integration test
-./gradlew ktlintFormat   # auto-format all sources
-./gradlew detekt ktlintCheck # run the linters without reformatting
+./gradlew build
+./gradlew :klass-tree-analyzer:test
+./gradlew ktlintFormat
+./gradlew detekt ktlintCheck
 ```

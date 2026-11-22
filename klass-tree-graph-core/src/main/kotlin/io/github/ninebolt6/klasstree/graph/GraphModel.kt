@@ -3,10 +3,6 @@ package io.github.ninebolt6.klasstree.graph
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/**
- * The first version aggregates members into their owning class (or file scope for top-level
- * declarations). Declaration-level nodes can be added later without changing the JSON schema.
- */
 @Serializable
 enum class NodeKind {
     CLASS,
@@ -30,11 +26,6 @@ enum class EdgeKind {
     OPERATOR_OR_SYNTHETIC_CALL,
 }
 
-/**
- * [id] is stable within one analysis snapshot. It is intentionally not just an FQ name: the
- * module/source set, source path and declaration kind are included so that nested and same-named
- * declarations do not collapse into one node.
- */
 @Serializable
 data class GraphNode(
     val id: String,
@@ -57,7 +48,6 @@ data class CallSite(
     val column: Int,
 )
 
-/** A directed dependency edge: `from` depends on `to`. */
 @Serializable
 data class GraphEdge(
     val from: String,

@@ -25,11 +25,6 @@ import org.jetbrains.kotlin.psi.KtProperty
 import org.jetbrains.kotlin.psi.KtTypeAlias
 import java.util.IdentityHashMap
 
-/**
- * Builds the declaration nodes for one analysis run and maps PSI elements / resolved symbols to
- * those nodes. Members are aggregated into their owning class; top-level functions and properties
- * are aggregated into a per-file FILE_SCOPE node.
- */
 internal class DeclarationIndex(
     private val builder: GraphBuilder,
 ) {
@@ -66,14 +61,9 @@ internal class DeclarationIndex(
     fun nodeForQualifiedName(fqName: String): GraphNode? = classNodesByFqName[fqName] ?: fileScopeAliases[fqName]
 
     fun nodeForSymbol(symbol: KaSymbol): GraphNode? {
-        // nodeForElement walks the PSI parents, covering declared classes and aliases as well as
-        // member symbols belonging to an indexed declaration.
         val fromPsi = (symbol.psi ?: symbol.realPsi ?: symbol.anchorPsi)?.let { nodeForElement(it) }
 
-        // Constructors (including implicit primary constructors and annotation constructors)
-        // do not always expose their owning class through `psi`. Fall back to the class id so
-        // `Foo()` and `@Foo` still connect to the source class node. The same lookup covers Java
-        // classes, whose light symbols do not lead back to the PsiClass node either.
+        // Implicit constructors and Java light symbols may not expose their owning declaration through PSI.
         val fqName =
             (symbol as? KaClassLikeSymbol)?.classId?.asSingleFqName()?.asString()
                 ?: (symbol as? KaConstructorSymbol)?.containingClassId?.asSingleFqName()?.asString()
@@ -274,8 +264,7 @@ internal class DeclarationIndex(
                         column = 1,
                     )
                 builder.addNode(node)
-                // Java sources see Kotlin top-level members through the file facade class
-                // (`K.kt` -> `com.example.KKt`); alias the facade name back to this node.
+                // Kotlin top-level members are exposed to Java through JVM file facade classes.
                 if (packageName != null && info.file.name.endsWith(".kt")) {
                     val facade =
                         (info.file as? KtFile)?.jvmNameAnnotation()
