@@ -14,11 +14,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
 
-      - name: Verify release tag
-        run: |
-          version="$(sed -n 's/^VERSION_NAME=//p' gradle.properties)"
-          test "$GITHUB_REF_NAME" = "v$version"
-
       - uses: actions/setup-java@v6.3.0
         with:
           distribution: temurin
@@ -27,7 +22,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6.4.1
 
       - name: Publish to Maven Central
-        run: ./gradlew publishToMavenCentral
+        run: ./gradlew publishToMavenCentral -PVERSION_NAME="${GITHUB_REF_NAME#v}"
         env:
           ORG_GRADLE_PROJECT_signAllPublications: true
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
@@ -36,7 +31,7 @@ jobs:
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_IN_MEMORY_KEY_PASSWORD }}
 
       - name: Publish to Gradle Plugin Portal
-        run: ./gradlew publishPlugins
+        run: ./gradlew publishPlugins -PVERSION_NAME="${GITHUB_REF_NAME#v}"
         env:
           ORG_GRADLE_PROJECT_signAllPublications: true
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_IN_MEMORY_KEY }}
