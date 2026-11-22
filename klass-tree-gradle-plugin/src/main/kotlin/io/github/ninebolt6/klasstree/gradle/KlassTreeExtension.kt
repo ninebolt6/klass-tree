@@ -50,6 +50,6 @@ abstract class KlassTreeExtension
         }
 
         companion object {
-            const val DEFAULT_ANALYSIS_API_VERSION = "2.5.0-Beta2"
+            const val DEFAULT_ANALYSIS_API_VERSION = "2.5.0-RC"
         }
     }

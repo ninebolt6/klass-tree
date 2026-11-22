@@ -37,7 +37,7 @@ Root `build.gradle.kts`:
 
 ```kotlin
 plugins {
-    kotlin("jvm") version "2.5.0-Beta2" apply false
+    kotlin("jvm") version "2.5.0-RC" apply false
     id("io.github.ninebolt6.klass-tree")
 }
 ```
@@ -61,7 +61,7 @@ klassTree {
     includeJavaSources.set(true)
     formats.set(setOf("json", "dot"))
     outputDirectory.set(layout.buildDirectory.dir("klass-tree"))
-    analysisApiVersion.set("2.5.0-Beta2")
+    analysisApiVersion.set("2.5.0-RC")
     failOnAnalysisError.set(false)
     analyzerJvmArgs.set(emptyList())
     baselineFile.set(layout.projectDirectory.file("klass-tree-baseline.json"))
