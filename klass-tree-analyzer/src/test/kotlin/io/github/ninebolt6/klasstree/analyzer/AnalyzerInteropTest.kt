@@ -16,6 +16,23 @@ import kotlin.test.assertTrue
 
 class AnalyzerInteropTest {
     @Test
+    fun `java resolves project members through library return types`() {
+        val result =
+            analyze(
+                module(
+                    ":app:main",
+                    "Target.java" to "public class Target { public void ping() {} }",
+                    "Caller.java" to """
+                    public class Caller {
+                        void call() { kotlin.collections.CollectionsKt.listOf(new Target()).get(0).ping(); }
+                    }
+                """,
+                ),
+            )
+        assertNotNull(edge(result.graph, "Caller", "Target", EdgeKind.FUNCTION_CALL))
+    }
+
+    @Test
     fun `java facade calls stay in their own module`() {
         val result =
             analyze(
