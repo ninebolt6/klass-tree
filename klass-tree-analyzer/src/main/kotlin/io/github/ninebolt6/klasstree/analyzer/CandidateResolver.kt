@@ -183,16 +183,6 @@ internal class CandidateResolver(
         }
     }
 
-    context(session: KaSession)
-    private fun KaSymbol.unwrapSubstitutionOverrides(): KaSymbol =
-        generateSequence(this) { symbol ->
-            if (symbol is KaCallableSymbol && symbol.origin == KaSymbolOrigin.SUBSTITUTION_OVERRIDE) {
-                symbol.directlyOverriddenSymbols.singleOrNull()
-            } else {
-                null
-            }
-        }.last()
-
     private fun dispositionOf(symbol: KaSymbol): SymbolDisposition =
         when {
             symbol is KaPackageSymbol || symbol is KaTypeParameterSymbol -> SymbolDisposition.SKIPPED
@@ -225,3 +215,14 @@ internal class CandidateResolver(
 
     private enum class SymbolDisposition { RECORD, SKIPPED, EXTERNAL }
 }
+
+@OptIn(KaExperimentalApi::class)
+context(session: KaSession)
+private fun KaSymbol.unwrapSubstitutionOverrides(): KaSymbol =
+    generateSequence(this) { symbol ->
+        if (symbol is KaCallableSymbol && symbol.origin == KaSymbolOrigin.SUBSTITUTION_OVERRIDE) {
+            symbol.directlyOverriddenSymbols.singleOrNull()
+        } else {
+            null
+        }
+    }.last()
