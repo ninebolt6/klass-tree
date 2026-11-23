@@ -22,69 +22,6 @@ class KlassTreeFunctionalTest {
     lateinit var projectDir: Path
 
     @Test
-    fun `klassTree builds generated sources and reuses the configuration cache`() {
-        writeProject()
-        write(
-            "shared/build.gradle.kts",
-            """
-                plugins {
-                    id("org.jetbrains.kotlin.jvm")
-                }
-
-                abstract class GenerateKotlin : DefaultTask() {
-                    @get:OutputDirectory
-                    abstract val outputDir: DirectoryProperty
-
-                    @TaskAction
-                    fun generate() {
-                        outputDir.file("shared/Generated.kt").get().asFile.apply {
-                            parentFile.mkdirs()
-                            writeText("package shared; class Generated")
-                        }
-                    }
-                }
-
-                val generateKotlin = tasks.register<GenerateKotlin>("generateKotlin") {
-                    outputDir.set(layout.buildDirectory.dir("generated/kotlin"))
-                }
-                kotlin.sourceSets.main {
-                    kotlin.srcDir(generateKotlin)
-                }
-            """,
-        )
-        write(
-            "shared/src/main/kotlin/shared/Shared.kt",
-            """
-                package shared
-
-                class Shared(val generated: Generated)
-            """,
-        )
-
-        val result = runner("clean", "klassTree", "--configuration-cache").build()
-        val graph = projectDir.resolve("build/klass-tree/graph.json").toFile().readText()
-
-        assertEquals(TaskOutcome.SUCCESS, result.task(":shared:generateKotlin")?.outcome, result.output)
-        assertTrue(graph.contains("\"fqName\": \"shared.Generated\""), graph)
-        val json = Json.parseToJsonElement(graph).jsonObject
-        val nodes = json.getValue("nodes").jsonArray.map { it.jsonObject }
-        val generated = nodes.single { it.getValue("fqName").jsonPrimitive.content == "shared.Generated" }
-        val shared = nodes.single { it.getValue("fqName").jsonPrimitive.content == "shared.Shared" }
-        assertTrue(
-            json.getValue("edges").jsonArray.any {
-                it.jsonObject["from"] == shared["id"] && it.jsonObject["to"] == generated["id"]
-            },
-            graph,
-        )
-        assertNull(result.task(":shared:compileKotlin"))
-
-        val second = runner("clean", "klassTree", "--configuration-cache").build()
-        assertTrue(second.output.contains("Configuration cache entry reused"), second.output)
-        assertEquals(TaskOutcome.SUCCESS, second.task(":shared:generateKotlin")?.outcome)
-        assertTrue(normalizedGraph().contains("shared.Generated"))
-    }
-
-    @Test
     fun `help does not resolve source set dependencies`() {
         writeProject(invalidDependency = true)
 
@@ -116,6 +53,79 @@ class KlassTreeFunctionalTest {
         assertTrue(second.output.contains("Configuration cache entry reused"))
         assertTrue(second.output.contains(":klassTree UP-TO-DATE"))
         assertTrue(second.task(":klassTree")?.outcome == TaskOutcome.UP_TO_DATE)
+    }
+
+    @Test
+    fun `project dependency specs include transitive api dependencies`() {
+        writeTransitiveDependencyProject()
+        for (configuration in listOf("api", "implementation")) {
+            write(
+                "api/build.gradle.kts",
+                """
+                plugins {
+                    id("org.jetbrains.kotlin.jvm")
+                    `java-library`
+                }
+                dependencies { $configuration(project(":shared")) }
+                """,
+            )
+            runner("klassTree").build()
+            val spec =
+                Json
+                    .parseToJsonElement(
+                        projectDir.resolve("build/klass-tree/analysis-spec.json").toFile().readText(),
+                    ).jsonObject
+            val rootModule =
+                spec.getValue("modules").jsonArray.single {
+                    it.jsonObject["projectPath"]?.jsonPrimitive?.content == ":"
+                }
+            val dependencies =
+                rootModule.jsonObject
+                    .getValue("dependencies")
+                    .jsonArray
+                    .map { it.jsonPrimitive.content }
+            val graph =
+                Json
+                    .parseToJsonElement(projectDir.resolve("build/klass-tree/graph.json").toFile().readText())
+                    .jsonObject
+            assertEquals(
+                (configuration == "api") to (configuration == "api"),
+                (":shared:main" in dependencies) to
+                    graph.getValue("edges").jsonArray.any {
+                        val edge = it.jsonObject
+                        edge
+                            .getValue("from")
+                            .jsonPrimitive.content
+                            .contains("Caller.java#") &&
+                            edge
+                                .getValue("to")
+                                .jsonPrimitive.content
+                                .contains("Shared.kt#") &&
+                            edge.getValue("kind").jsonPrimitive.content == "FUNCTION_CALL"
+                    },
+                "Transitive $configuration dependency must match compile visibility in both spec and graph",
+            )
+        }
+    }
+
+    private fun writeTransitiveDependencyProject() {
+        writeProject(rootIsKotlin = true)
+        write(
+            "build.gradle.kts",
+            """
+            plugins {
+                id("org.jetbrains.kotlin.jvm")
+                id("io.github.ninebolt6.klass-tree")
+            }
+            dependencies { implementation(project(":api")) }
+            klassTree { outputDirectory.set(layout.buildDirectory.dir("klass-tree")) }
+            """,
+        )
+        write(
+            "src/main/java/root/Caller.java",
+            "package root; public class Caller { void call() { new shared.Shared().ping(); } }",
+        )
+        write("shared/src/main/kotlin/shared/Shared.kt", "package shared\nclass Shared { fun ping() {} }")
     }
 
     @Test

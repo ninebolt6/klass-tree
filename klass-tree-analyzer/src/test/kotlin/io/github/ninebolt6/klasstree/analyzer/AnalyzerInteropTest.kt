@@ -16,6 +16,200 @@ import kotlin.test.assertTrue
 
 class AnalyzerInteropTest {
     @Test
+    fun `java resolves project members through library return types`() {
+        val result =
+            analyze(
+                module(
+                    ":app:main",
+                    "Target.java" to "public class Target { public void ping() {} }",
+                    "Caller.java" to """
+                    public class Caller {
+                        void call() { kotlin.collections.CollectionsKt.<Target>listOf(new Target()).get(0).ping(); }
+                    }
+                """,
+                ),
+            )
+        assertNotNull(edge(result.graph, "Caller", "Target", EdgeKind.FUNCTION_CALL), result.stats.toString())
+    }
+
+    @Test
+    fun `java facade calls stay in their own module`() {
+        val result =
+            analyze(
+                *listOf("first", "second")
+                    .map { name ->
+                        module(
+                            ":$name:main",
+                            "Helpers.kt" to "fun topLevel() {}",
+                            "Caller.java" to "public class Caller { void call() { HelpersKt.topLevel(); } }",
+                        )
+                    }.toTypedArray(),
+            )
+        for (name in listOf("first", "second")) {
+            val caller = result.graph.nodes.single { it.module == name && it.name == "Caller" }
+            val target = result.graph.nodes.single { it.module == name && it.kind == NodeKind.FILE_SCOPE }
+            assertEquals(
+                listOf(target.id),
+                result.graph.edges
+                    .filter { it.from == caller.id && it.kind == EdgeKind.FUNCTION_CALL }
+                    .map { it.to },
+                "$name must call its own Helpers.kt",
+            )
+        }
+    }
+
+    @Test
+    fun `java multifile facade calls reach the declaring file`() {
+        val result =
+            analyze(
+                module(
+                    ":app:main",
+                    "A.kt" to """
+                    @file:JvmName("Utils")
+                    @file:JvmMultifileClass
+                    fun a() {}
+                    const val valueA = 1
+                """,
+                    "B.kt" to """
+                    @file:JvmName("Utils")
+                    @file:JvmMultifileClass
+                    fun b() {}
+                    const val valueB = 2
+                """,
+                    "CallA.java" to """
+                    public class CallA {
+                        void call() { Utils.a(); }
+                        int value = Utils.valueA;
+                        Runnable ref = Utils::a;
+                        Class<?> facade = Utils.class;
+                    }
+                """,
+                    "CallB.java" to """
+                    public class CallB {
+                        void call() { Utils.b(); }
+                        int value = Utils.valueB;
+                        Runnable ref = Utils::b;
+                    }
+                """,
+                ),
+            )
+        for (name in listOf("A", "B")) {
+            val caller = result.graph.nodes.single { it.name == "Call$name" }
+            val target = result.graph.nodes.single { it.kind == NodeKind.FILE_SCOPE && it.name == "$name.kt" }
+            for (kind in listOf(EdgeKind.FUNCTION_CALL, EdgeKind.PROPERTY_ACCESS, EdgeKind.CALLABLE_REFERENCE)) {
+                assertEquals(
+                    listOf(target.id),
+                    result.graph.edges
+                        .filter { it.from == caller.id && it.kind == kind }
+                        .map { it.to },
+                    "Call$name $kind must reach $name.kt",
+                )
+            }
+            assertTrue(
+                result.graph.edges.none {
+                    it.from == caller.id && it.kind == EdgeKind.TYPE_REFERENCE &&
+                        result.graph.nodes
+                            .single { node -> node.id == it.to }
+                            .kind == NodeKind.FILE_SCOPE
+                },
+                "An ambiguous facade class must not select a file",
+            )
+        }
+    }
+
+    @Test
+    fun `java facade resolution respects declared module dependencies`() {
+        for (dependencies in listOf(emptyList(), listOf(":library:main"))) {
+            val result =
+                analyze(
+                    module(":library:main", "Helpers.kt" to "package example\nfun topLevel() {}"),
+                    module(
+                        ":app:main",
+                        "Caller.java" to "public class Caller { void call() { example.HelpersKt.topLevel(); } }",
+                        dependencies = dependencies,
+                    ),
+                )
+            val caller = result.graph.nodes.single { it.name == "Caller" }
+            val target = result.graph.nodes.single { it.kind == NodeKind.FILE_SCOPE }
+            assertEquals(
+                if (dependencies.isEmpty()) emptyList() else listOf(target.id),
+                result.graph.edges
+                    .filter { it.from == caller.id && it.kind == EdgeKind.FUNCTION_CALL }
+                    .map { it.to },
+                "Only declared dependencies should be visible",
+            )
+        }
+    }
+
+    @Test
+    fun `java call to a lowercase file facade reaches the packaged file scope node`() {
+        assertFileFacadeCall("helpers.kt", "HelpersKt")
+    }
+
+    @Test
+    fun `java call to a sanitized file facade reaches the file scope node`() {
+        assertFileFacadeCall("some-helpers.kt", "Some_helpersKt")
+    }
+
+    private fun assertFileFacadeCall(
+        fileName: String,
+        facade: String,
+    ) {
+        val result =
+            analyze(
+                module(
+                    ":app:main",
+                    fileName to "package com.example\nfun fn() {}",
+                    "Caller.java" to """
+                    package com.example;
+                    public class Caller {
+                        void call() { $facade.fn(); }
+                    }
+                """,
+                ),
+            )
+        val fileScope = result.graph.nodes.single { it.kind == NodeKind.FILE_SCOPE }
+        val caller = result.graph.nodes.single { it.name == "Caller" }
+        assertTrue(
+            result.graph.edges.any {
+                it.from == caller.id && it.to == fileScope.id && it.kind == EdgeKind.FUNCTION_CALL
+            },
+            "$facade calls must resolve to the FILE_SCOPE node, got edges " + result.graph.edges,
+        )
+    }
+
+    @Test
+    fun `java calls to default package facades reach the file scope node`() {
+        for (annotation in listOf("", "@file:JvmName(\"CustomHelpers\")")) {
+            val facade = if (annotation.isEmpty()) "HelpersKt" else "CustomHelpers"
+            val result =
+                analyze(
+                    module(
+                        ":app:main",
+                        "Helpers.kt" to """
+                        $annotation
+
+                        fun topLevel() {}
+                    """,
+                        "Caller.java" to """
+                        public class Caller {
+                            void call() { $facade.topLevel(); }
+                        }
+                    """,
+                    ),
+                )
+            val fileScope = result.graph.nodes.single { it.kind == NodeKind.FILE_SCOPE }
+            val caller = result.graph.nodes.single { it.fqName == "Caller" }
+            assertTrue(
+                result.graph.edges.any {
+                    it.from == caller.id && it.to == fileScope.id && it.kind == EdgeKind.FUNCTION_CALL
+                },
+                "$facade calls must resolve to the FILE_SCOPE node, got edges " + result.graph.edges,
+            )
+        }
+    }
+
+    @Test
     fun `java call to a JvmName facade reaches the file scope node`() {
         val result =
             analyze(

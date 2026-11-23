@@ -16,6 +16,59 @@ import kotlin.test.assertTrue
 
 class AnalyzerTest {
     @Test
+    fun `delegated members do not produce call edges to the interface`() {
+        val result =
+            analyze(
+                module(
+                    ":app:main",
+                    "Delegation.kt" to """
+                package com.example
+
+                interface I { fun f() }
+                class Impl(d: I) : I by d
+                class Use { fun g(x: Impl) = x.f() }
+                """,
+                ),
+            )
+
+        assertEquals(emptyList(), result.stats.resolution.analysisErrors)
+        assertEquals(null, edge(result.graph, "com.example.Use", "com.example.I", EdgeKind.FUNCTION_CALL))
+        assertEquals(null, edge(result.graph, "com.example.Use", "com.example.Impl", EdgeKind.FUNCTION_CALL))
+        assertEquals(emptyList(), result.graph.edges.filter { it.kind == EdgeKind.FUNCTION_CALL })
+    }
+
+    @Test
+    fun `inherited generic members point to their declaring class`() {
+        val result =
+            analyze(
+                module(
+                    ":app:main",
+                    "Inherited.kt" to """
+                package com.example
+
+                open class Base<T>(val prop: T) {
+                    fun value(): T = prop
+                }
+
+                class Child : Base<String>("value")
+
+                class Use {
+                    fun value(c: Child) = c.value()
+                    fun prop(c: Child) = c.prop
+                }
+                """,
+                ),
+            )
+
+        assertEquals(emptyList(), result.stats.resolution.analysisErrors)
+        for (kind in listOf(EdgeKind.FUNCTION_CALL, EdgeKind.PROPERTY_ACCESS)) {
+            val inheritedEdge = assertNotNull(edge(result.graph, "com.example.Use", "com.example.Base", kind))
+            assertEquals(1, inheritedEdge.callSites.size)
+            assertEquals(null, edge(result.graph, "com.example.Use", "com.example.Child", kind))
+        }
+    }
+
+    @Test
     fun `builds source nodes and semantic edges without external nodes`() {
         val result =
             analyze(
@@ -550,6 +603,29 @@ class AnalyzerTest {
                 it.from == uses.id && it.to == point.id && it.kind == EdgeKind.TYPE_REFERENCE
             },
         )
+    }
+
+    @Test
+    fun `sam constructor calls record a constructor call edge`() {
+        val result =
+            analyze(
+                module(
+                    ":app:main",
+                    "App.kt" to """
+                package com.example
+
+                fun interface Action {
+                    fun run()
+                }
+
+                class Job {
+                    fun schedule(): Action = Action { }
+                }
+                """,
+                ),
+            )
+
+        assertNotNull(edge(result.graph, "com.example.Job", "com.example.Action", EdgeKind.CONSTRUCTOR_CALL))
     }
 
     @Test
