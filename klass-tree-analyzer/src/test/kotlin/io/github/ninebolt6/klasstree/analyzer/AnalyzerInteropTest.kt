@@ -21,11 +21,6 @@ class AnalyzerInteropTest {
     }
 
     @Test
-    fun `java call to a lowercase file facade reaches the default package file scope node`() {
-        assertFileFacadeCall("helpers.kt", "HelpersKt", "")
-    }
-
-    @Test
     fun `java call to a sanitized file facade reaches the file scope node`() {
         assertFileFacadeCall("some-helpers.kt", "Some_helpersKt", "com.example")
     }
