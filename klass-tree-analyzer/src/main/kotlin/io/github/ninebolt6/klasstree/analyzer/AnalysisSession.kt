@@ -1,6 +1,8 @@
 package io.github.ninebolt6.klasstree.analyzer
 
+import com.intellij.mock.MockProject
 import com.intellij.openapi.Disposable
+import com.intellij.psi.impl.ResolveScopeManager
 import io.github.ninebolt6.klasstree.graph.AnalysisSpec
 import org.jetbrains.kotlin.analysis.api.KaExperimentalApi
 import org.jetbrains.kotlin.analysis.api.projectStructure.KaLibraryModule
@@ -24,6 +26,7 @@ internal fun buildAnalysisSession(
     buildStandaloneAnalysisAPISession(projectDisposable = projectDisposable) {
         // KT-70489: FIR/PSI caches must be dropped during long analyses on monolith inputs.
         enableCacheCleaner()
+        (project as MockProject).registerService(ResolveScopeManager::class.java, ModuleResolveScopeManager::class.java)
         buildKtModuleProvider {
             platform = JvmPlatforms.defaultJvmPlatform
             // KT-71706: the default scope enumerates every library class file and balloons heap.
