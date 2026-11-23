@@ -18,6 +18,7 @@ import org.jetbrains.kotlin.analysis.api.symbols.KaPropertySymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaSymbolLocation
 import org.jetbrains.kotlin.analysis.api.symbols.KaSymbolOrigin
+import org.jetbrains.kotlin.analysis.api.symbols.KaSyntheticJavaPropertySymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaTypeParameterSymbol
 import org.jetbrains.kotlin.resolution.KtResolvable
 
@@ -156,6 +157,10 @@ internal class CandidateResolver(
     ) {
         if (symbol == null) {
             stats.unresolved++
+            return
+        }
+        if (symbol is KaSyntheticJavaPropertySymbol) {
+            handleSymbol(symbol.javaGetterSymbol, element, kind)
             return
         }
         when (dispositionOf(symbol)) {

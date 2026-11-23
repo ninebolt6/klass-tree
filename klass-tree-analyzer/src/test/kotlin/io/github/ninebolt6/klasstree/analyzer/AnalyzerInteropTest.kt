@@ -16,6 +16,32 @@ import kotlin.test.assertTrue
 
 class AnalyzerInteropTest {
     @Test
+    fun `kotlin reads java getters as synthetic properties`() {
+        val result =
+            analyze(
+                module(
+                    ":app:main",
+                    "Bean.java" to """
+                    package com.example;
+                    public class Bean {
+                        public String getName() { return ""; }
+                    }
+                """,
+                    "Use.kt" to """
+                    package com.example
+
+                    fun use(b: Bean): String = b.name
+                """,
+                ),
+            )
+        assertNotNull(
+            edge(result.graph, "com.example", "com.example.Bean", EdgeKind.PROPERTY_ACCESS),
+            "Kotlin synthetic property reads must reach the Java getter's class",
+        )
+        assertEquals(0, result.stats.resolution.unresolved)
+    }
+
+    @Test
     fun `java call to a JvmName facade reaches the file scope node`() {
         val result =
             analyze(
