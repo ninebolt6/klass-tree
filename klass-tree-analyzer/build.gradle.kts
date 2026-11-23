@@ -7,6 +7,7 @@ dependencies {
 
     // Analysis API runtime dependencies must remain isolated from the Gradle plugin classpath.
     compileOnly(libs.kotlin.analysis.api)
+    compileOnly(libs.kotlin.analysis.api.implementation)
 
     testImplementation(libs.kotlin.analysis.api)
     testImplementation(kotlin("test"))

@@ -9,6 +9,7 @@ ktlint = "2.0.0-ALPHA-4"
 junit-jupiter = { group = "org.junit.jupiter", name = "junit-jupiter", version.ref = "junit" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 kotlin-analysis-api = { group = "org.jetbrains.kotlin", name = "kotlin-analysis-api", version.ref = "kotlin" }
+kotlin-analysis-api-implementation = { group = "org.jetbrains.kotlin", name = "kotlin-analysis-api-implementation", version.ref = "kotlin" }
 kotlin-gradle-plugin-api = { group = "org.jetbrains.kotlin", name = "kotlin-gradle-plugin-api", version.ref = "kotlin" }
 kotlin-gradle-plugin = { group = "org.jetbrains.kotlin", name = "kotlin-gradle-plugin", version.ref = "kotlin" }
 ktlint-cli = { group = "io.github.ktlint.core", name = "ktlint-cli", version.ref = "ktlint" }
