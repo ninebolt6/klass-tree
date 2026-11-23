@@ -4,15 +4,15 @@ import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.api.artifacts.ProjectDependency
 import org.gradle.api.artifacts.component.ProjectComponentIdentifier
+import org.gradle.api.file.FileCollection
 import org.gradle.api.tasks.TaskProvider
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmExtension
 import org.jetbrains.kotlin.gradle.plugin.KotlinBasePlugin
 import org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType
-import java.io.File
 
 internal data class KotlinProjectScan(
-    val sourceDirectories: List<File>,
+    val sourceDirectories: List<FileCollection>,
     val moduleTasks: List<TaskProvider<KlassTreeModuleSpecTask>>,
 )
 
@@ -33,7 +33,7 @@ internal object KotlinProjectScanner {
             } else {
                 null
             } ?: return KotlinProjectScan(emptyList(), emptyList())
-        val sourceDirectories = LinkedHashSet<File>()
+        val sourceDirectories = mutableListOf<FileCollection>()
         val moduleTasks = mutableListOf<TaskProvider<KlassTreeModuleSpecTask>>()
         val seenSourceSets = mutableSetOf<String>()
 
@@ -44,7 +44,7 @@ internal object KotlinProjectScanner {
             if (!seenSourceSets.add(sourceSet.name)) return@forEach
 
             val directories = sourceDirectories(project, sourceSet, includeJavaSources)
-            sourceDirectories += directories
+            sourceDirectories.add(directories)
             val dependencyConfiguration =
                 project.configurations.named(
                     compilation.compileDependencyConfigurationName,
@@ -97,20 +97,22 @@ internal object KotlinProjectScanner {
         project: Project,
         sourceSet: org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet,
         includeJavaSources: Boolean,
-    ): List<File> {
-        val directories = LinkedHashSet<File>()
-        directories += sourceSet.kotlin.srcDirs
-        directories += sourceSet.generatedKotlin.srcDirs
+    ): FileCollection {
+        val directories =
+            project.files(
+                sourceSet.kotlin.sourceDirectories,
+                sourceSet.generatedKotlin.sourceDirectories,
+            )
         if (includeJavaSources) {
             project.extensions
                 .findByType(org.gradle.api.plugins.JavaPluginExtension::class.java)
                 ?.sourceSets
                 ?.findByName(sourceSet.name)
                 ?.java
-                ?.srcDirs
-                ?.let { directories += it }
+                ?.sourceDirectories
+                ?.let { directories.from(it) }
         }
-        return directories.toList()
+        return directories
     }
 
     private fun moduleName(
