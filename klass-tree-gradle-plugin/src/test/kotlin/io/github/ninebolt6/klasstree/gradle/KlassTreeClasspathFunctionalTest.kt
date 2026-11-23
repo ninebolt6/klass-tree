@@ -5,6 +5,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.gradle.testkit.runner.GradleRunner
+import org.gradle.testkit.runner.TaskOutcome
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
@@ -104,6 +105,13 @@ class KlassTreeClasspathFunctionalTest {
         assertTrue(Regex("external=([1-9][0-9]*)").containsMatchIn(result.output))
         assertFalse(graph.contains(":shared:main:"))
         assertNotNull(result.task(":shared:compileJava"))
+
+        write("shared/src/main/java/shared/Shared.java", "package shared; public class Shared { public int value; }")
+
+        val changed = runner("klassTree").build()
+
+        assertEquals(spec, readOutput("analysis-spec.json"))
+        assertEquals(TaskOutcome.SUCCESS, changed.task(":klassTree")?.outcome)
     }
 
     private fun writeProject() {

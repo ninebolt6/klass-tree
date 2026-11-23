@@ -193,15 +193,15 @@ class KlassTreePlugin : Plugin<Project> {
                     scan.moduleTasks.any { it.get().sourceSetName.get() == "main" }
                 }.keys
                 .toList()
+        val moduleTasks = projectScans.values.flatMap { it.moduleTasks }
         val moduleSpecOutputs =
-            projectScans.values
-                .flatMap { it.moduleTasks }
-                .map { moduleTask ->
-                    moduleTask.configure { it.sourceProjectPaths.set(sourceProjectPaths) }
-                    moduleTask.flatMap(KlassTreeModuleSpecTask::outputFile)
-                }
+            moduleTasks.map { moduleTask ->
+                moduleTask.configure { it.sourceProjectPaths.set(sourceProjectPaths) }
+                moduleTask.flatMap(KlassTreeModuleSpecTask::outputFile)
+            }
         task.configure { klassTreeTask ->
             klassTreeTask.moduleSpecFiles.from(moduleSpecOutputs)
+            klassTreeTask.moduleClasspath.from(moduleTasks.map { it.map(KlassTreeModuleSpecTask::classpath) })
             klassTreeTask.sourceFiles.from(sourceDirectories)
             klassTreeTask.formats.set(formats)
         }
