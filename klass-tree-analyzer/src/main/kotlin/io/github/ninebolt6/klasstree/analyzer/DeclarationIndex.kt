@@ -15,6 +15,7 @@ import io.github.ninebolt6.klasstree.graph.moduleLabel
 import org.jetbrains.kotlin.analysis.api.symbols.KaClassLikeSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaConstructorSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaSymbol
+import org.jetbrains.kotlin.fileClasses.JvmFileClassUtil
 import org.jetbrains.kotlin.psi.KtClass
 import org.jetbrains.kotlin.psi.KtClassOrObject
 import org.jetbrains.kotlin.psi.KtEnumEntry
@@ -86,15 +87,6 @@ internal class DeclarationIndex(
     ) {
         builder.addEdge(from.id, to.id, kind, site)
     }
-
-    private fun KtFile.jvmNameAnnotation(): String? =
-        annotationEntries
-            .firstOrNull { it.shortName?.asString() == "JvmName" }
-            ?.valueArguments
-            ?.firstOrNull()
-            ?.getArgumentExpression()
-            ?.text
-            ?.removeSurrounding("\"")
 
     private fun SourceFileInfo.packageName(): String =
         when (val file = file) {
@@ -265,11 +257,9 @@ internal class DeclarationIndex(
                     )
                 builder.addNode(node)
                 // Kotlin top-level members are exposed to Java through JVM file facade classes.
-                if (packageName != null && info.file.name.endsWith(".kt")) {
-                    val facade =
-                        (info.file as? KtFile)?.jvmNameAnnotation()
-                            ?: "${info.file.name.removeSuffix(".kt")}Kt"
-                    fileScopeAliases["$packageName.$facade"] = node
+                if (packageName != null && info.file is KtFile && info.file.name.endsWith(".kt")) {
+                    val facade = JvmFileClassUtil.getFileClassInfoNoResolve(info.file).facadeClassFqName
+                    fileScopeAliases[facade.asString()] = node
                 }
                 node
             }

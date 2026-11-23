@@ -42,6 +42,43 @@ class AnalyzerInteropTest {
     }
 
     @Test
+    fun `java call to a lowercase file facade reaches the packaged file scope node`() {
+        assertFileFacadeCall("helpers.kt", "HelpersKt")
+    }
+
+    @Test
+    fun `java call to a sanitized file facade reaches the file scope node`() {
+        assertFileFacadeCall("some-helpers.kt", "Some_helpersKt")
+    }
+
+    private fun assertFileFacadeCall(
+        fileName: String,
+        facade: String,
+    ) {
+        val result =
+            analyze(
+                module(
+                    ":app:main",
+                    fileName to "package com.example\nfun fn() {}",
+                    "Caller.java" to """
+                    package com.example;
+                    public class Caller {
+                        void call() { $facade.fn(); }
+                    }
+                """,
+                ),
+            )
+        val fileScope = result.graph.nodes.single { it.kind == NodeKind.FILE_SCOPE }
+        val caller = result.graph.nodes.single { it.name == "Caller" }
+        assertTrue(
+            result.graph.edges.any {
+                it.from == caller.id && it.to == fileScope.id && it.kind == EdgeKind.FUNCTION_CALL
+            },
+            "$facade calls must resolve to the FILE_SCOPE node, got edges " + result.graph.edges,
+        )
+    }
+
+    @Test
     fun `java call to a JvmName facade reaches the file scope node`() {
         val result =
             analyze(
