@@ -9,6 +9,7 @@ import org.jetbrains.kotlin.analysis.api.resolution.KaSimpleOrMultiCall
 import org.jetbrains.kotlin.analysis.api.resolution.calls
 import org.jetbrains.kotlin.analysis.api.resolution.resolveSuccessfulCall
 import org.jetbrains.kotlin.analysis.api.resolution.resolveSuccessfulSymbol
+import org.jetbrains.kotlin.analysis.api.symbols.KaCallableSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaClassLikeSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaConstructorSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaJavaFieldSymbol
@@ -20,6 +21,9 @@ import org.jetbrains.kotlin.analysis.api.symbols.KaSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaSymbolLocation
 import org.jetbrains.kotlin.analysis.api.symbols.KaSymbolOrigin
 import org.jetbrains.kotlin.analysis.api.symbols.KaTypeParameterSymbol
+import org.jetbrains.kotlin.analysis.api.symbols.allOverriddenSymbols
+import org.jetbrains.kotlin.analysis.api.symbols.directlyOverriddenSymbols
+import org.jetbrains.kotlin.analysis.api.symbols.fakeOverrideOriginal
 import org.jetbrains.kotlin.resolution.KtResolvable
 
 @OptIn(KaExperimentalApi::class)
@@ -131,6 +135,7 @@ internal class CandidateResolver(
         }
     }
 
+    context(session: KaSession)
     private fun handleCalls(
         call: KaSimpleOrMultiCall?,
         element: PsiElement,
@@ -151,6 +156,7 @@ internal class CandidateResolver(
         }
     }
 
+    context(session: KaSession)
     private fun handleSymbol(
         symbol: KaSymbol?,
         element: PsiElement,
@@ -160,7 +166,8 @@ internal class CandidateResolver(
             stats.unresolved++
             return
         }
-        when (dispositionOf(symbol)) {
+        val originalSymbol = symbol.unwrapSubstitutionOverrides()
+        when (dispositionOf(originalSymbol)) {
             SymbolDisposition.SKIPPED -> {
                 stats.skipped++
             }
@@ -170,7 +177,7 @@ internal class CandidateResolver(
             }
 
             SymbolDisposition.RECORD -> {
-                val to = index.nodeForSymbol(symbol)
+                val to = index.nodeForSymbol(originalSymbol)
                 if (to == null) {
                     stats.skipped++
                 } else {
@@ -215,4 +222,27 @@ internal class CandidateResolver(
         }
 
     private enum class SymbolDisposition { RECORD, SKIPPED, EXTERNAL }
+}
+
+@OptIn(KaExperimentalApi::class)
+context(session: KaSession)
+private fun KaSymbol.unwrapSubstitutionOverrides(): KaSymbol =
+    generateSequence(this) { symbol ->
+        if (symbol !is KaCallableSymbol || symbol.origin != KaSymbolOrigin.SUBSTITUTION_OVERRIDE) {
+            return@generateSequence null
+        }
+        val parent =
+            if (symbol is KaJavaFieldSymbol) {
+                symbol.fakeOverrideOriginal
+            } else {
+                symbol.directlyOverriddenSymbols.singleOrNull()
+            }
+        parent?.takeIf { it.coversOverridesOf(symbol) }
+    }.last()
+
+/** Covers every overridden declaration so unwrapping preserves inherited parents, e.g. substituted intersections. */
+context(session: KaSession)
+private fun KaCallableSymbol.coversOverridesOf(other: KaCallableSymbol): Boolean {
+    val covered = allOverriddenSymbols.toSet() + this
+    return other.allOverriddenSymbols.all { it in covered }
 }
