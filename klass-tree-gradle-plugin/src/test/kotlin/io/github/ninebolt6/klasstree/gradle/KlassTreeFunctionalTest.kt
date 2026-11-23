@@ -56,6 +56,79 @@ class KlassTreeFunctionalTest {
     }
 
     @Test
+    fun `project dependency specs include transitive api dependencies`() {
+        writeTransitiveDependencyProject()
+        for (configuration in listOf("api", "implementation")) {
+            write(
+                "api/build.gradle.kts",
+                """
+                plugins {
+                    id("org.jetbrains.kotlin.jvm")
+                    `java-library`
+                }
+                dependencies { $configuration(project(":shared")) }
+                """,
+            )
+            runner("klassTree").build()
+            val spec =
+                Json
+                    .parseToJsonElement(
+                        projectDir.resolve("build/klass-tree/analysis-spec.json").toFile().readText(),
+                    ).jsonObject
+            val rootModule =
+                spec.getValue("modules").jsonArray.single {
+                    it.jsonObject["projectPath"]?.jsonPrimitive?.content == ":"
+                }
+            val dependencies =
+                rootModule.jsonObject
+                    .getValue("dependencies")
+                    .jsonArray
+                    .map { it.jsonPrimitive.content }
+            val graph =
+                Json
+                    .parseToJsonElement(projectDir.resolve("build/klass-tree/graph.json").toFile().readText())
+                    .jsonObject
+            assertEquals(
+                (configuration == "api") to (configuration == "api"),
+                (":shared:main" in dependencies) to
+                    graph.getValue("edges").jsonArray.any {
+                        val edge = it.jsonObject
+                        edge
+                            .getValue("from")
+                            .jsonPrimitive.content
+                            .contains("Caller.java#") &&
+                            edge
+                                .getValue("to")
+                                .jsonPrimitive.content
+                                .contains("Shared.kt#") &&
+                            edge.getValue("kind").jsonPrimitive.content == "FUNCTION_CALL"
+                    },
+                "Transitive $configuration dependency must match compile visibility in both spec and graph",
+            )
+        }
+    }
+
+    private fun writeTransitiveDependencyProject() {
+        writeProject(rootIsKotlin = true)
+        write(
+            "build.gradle.kts",
+            """
+            plugins {
+                id("org.jetbrains.kotlin.jvm")
+                id("io.github.ninebolt6.klass-tree")
+            }
+            dependencies { implementation(project(":api")) }
+            klassTree { outputDirectory.set(layout.buildDirectory.dir("klass-tree")) }
+            """,
+        )
+        write(
+            "src/main/java/root/Caller.java",
+            "package root; public class Caller { void call() { new shared.Shared().ping(); } }",
+        )
+        write("shared/src/main/kotlin/shared/Shared.kt", "package shared\nclass Shared { fun ping() {} }")
+    }
+
+    @Test
     fun `test source set excludes project outputs and depends on main module`() {
         writeProject(includeTests = true)
 

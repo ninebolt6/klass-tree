@@ -16,54 +16,56 @@ import kotlin.test.assertTrue
 
 class AnalyzerTest {
     @Test
-    fun `typealias constructors resolve to the underlying source class`() {
+    fun `delegated members do not produce call edges to the interface`() {
         val result =
             analyze(
                 module(
                     ":app:main",
-                    "Aliases.kt" to """
+                    "Delegation.kt" to """
                 package com.example
 
-                class Foo
-                typealias Alias = Foo
-                class Caller {
-                    fun direct() = Foo()
-                    fun aliased() = Alias()
+                interface I { fun f() }
+                class Impl(d: I) : I by d
+                class Use { fun g(x: Impl) = x.f() }
+                """,
+                ),
+            )
+
+        assertEquals(emptyList(), result.stats.resolution.analysisErrors)
+        assertEquals(null, edge(result.graph, "com.example.Use", "com.example.I", EdgeKind.FUNCTION_CALL))
+        assertEquals(null, edge(result.graph, "com.example.Use", "com.example.Impl", EdgeKind.FUNCTION_CALL))
+        assertEquals(emptyList(), result.graph.edges.filter { it.kind == EdgeKind.FUNCTION_CALL })
+    }
+
+    @Test
+    fun `inherited generic members point to their declaring class`() {
+        val result =
+            analyze(
+                module(
+                    ":app:main",
+                    "Inherited.kt" to """
+                package com.example
+
+                open class Base<T>(val prop: T) {
+                    fun value(): T = prop
+                }
+
+                class Child : Base<String>("value")
+
+                class Use {
+                    fun value(c: Child) = c.value()
+                    fun prop(c: Child) = c.prop
                 }
                 """,
                 ),
             )
 
-        val constructorEdge =
-            assertNotNull(edge(result.graph, "com.example.Caller", "com.example.Foo", EdgeKind.CONSTRUCTOR_CALL))
-        assertEquals(listOf(6, 7), constructorEdge.callSites.map { it.line }.sorted())
-        assertEquals(1, result.graph.edges.count { it.kind == EdgeKind.CONSTRUCTOR_CALL })
         assertEquals(emptyList(), result.stats.resolution.analysisErrors)
-        assertEquals(0, result.stats.resolution.unresolved)
-    }
-
-    @Test
-    fun `typealias library constructors count as external like direct constructors`() {
-        fun resolve(constructor: String) =
-            analyze(
-                module(
-                    ":app:main",
-                    "Aliases.kt" to """
-                package com.example
-
-                typealias Alias = java.lang.StringBuilder
-                class Caller { fun create() = $constructor() }
-                """,
-                ),
-            )
-
-        val direct = resolve("java.lang.StringBuilder")
-        val aliased = resolve("Alias")
-        assertEquals(emptyList(), aliased.stats.resolution.analysisErrors)
-        assertEquals(0, aliased.stats.resolution.unresolved)
-        assertEquals(direct.stats.resolution.resolvedExternal, aliased.stats.resolution.resolvedExternal)
-        assertTrue(aliased.graph.edges.none { it.kind == EdgeKind.CONSTRUCTOR_CALL })
-        assertEquals(direct.graph.nodes, aliased.graph.nodes)
+        for (kind in listOf(EdgeKind.FUNCTION_CALL, EdgeKind.PROPERTY_ACCESS)) {
+            val inheritedEdge = assertNotNull(edge(result.graph, "com.example.Use", "com.example.Base", kind))
+            assertEquals(1, inheritedEdge.callSites.size)
+            assertEquals(null, edge(result.graph, "com.example.Use", "com.example.Child", kind))
+        }
     }
 
     @Test
@@ -601,6 +603,29 @@ class AnalyzerTest {
                 it.from == uses.id && it.to == point.id && it.kind == EdgeKind.TYPE_REFERENCE
             },
         )
+    }
+
+    @Test
+    fun `sam constructor calls record a constructor call edge`() {
+        val result =
+            analyze(
+                module(
+                    ":app:main",
+                    "App.kt" to """
+                package com.example
+
+                fun interface Action {
+                    fun run()
+                }
+
+                class Job {
+                    fun schedule(): Action = Action { }
+                }
+                """,
+                ),
+            )
+
+        assertNotNull(edge(result.graph, "com.example.Job", "com.example.Action", EdgeKind.CONSTRUCTOR_CALL))
     }
 
     @Test

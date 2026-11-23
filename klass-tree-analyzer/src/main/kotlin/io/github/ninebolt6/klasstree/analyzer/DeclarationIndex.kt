@@ -32,7 +32,6 @@ internal class DeclarationIndex(
     private val classNodesByFqName = HashMap<String, GraphNode>()
     private val typeAliasNodes = IdentityHashMap<KtTypeAlias, GraphNode>()
     private val fileScopeNodes = HashMap<String, GraphNode>()
-    private val fileScopeAliases = HashMap<String, GraphNode>()
     private val fileInfoByFile = IdentityHashMap<PsiFile, SourceFileInfo>()
     private val documents = IdentityHashMap<PsiFile, Document?>()
     private val indexer = Indexer()
@@ -58,7 +57,7 @@ internal class DeclarationIndex(
         }
     }
 
-    fun nodeForQualifiedName(fqName: String): GraphNode? = classNodesByFqName[fqName] ?: fileScopeAliases[fqName]
+    fun nodeForQualifiedName(fqName: String): GraphNode? = classNodesByFqName[fqName]
 
     fun nodeForSymbol(symbol: KaSymbol): GraphNode? {
         val fromPsi = (symbol.psi ?: symbol.realPsi ?: symbol.anchorPsi)?.let { nodeForElement(it) }
@@ -86,15 +85,6 @@ internal class DeclarationIndex(
     ) {
         builder.addEdge(from.id, to.id, kind, site)
     }
-
-    private fun KtFile.jvmNameAnnotation(): String? =
-        annotationEntries
-            .firstOrNull { it.shortName?.asString() == "JvmName" }
-            ?.valueArguments
-            ?.firstOrNull()
-            ?.getArgumentExpression()
-            ?.text
-            ?.removeSurrounding("\"")
 
     private fun SourceFileInfo.packageName(): String =
         when (val file = file) {
@@ -264,13 +254,6 @@ internal class DeclarationIndex(
                         column = 1,
                     )
                 builder.addNode(node)
-                // Kotlin top-level members are exposed to Java through JVM file facade classes.
-                if (packageName != null && info.file.name.endsWith(".kt")) {
-                    val facade =
-                        (info.file as? KtFile)?.jvmNameAnnotation()
-                            ?: "${info.file.name.removeSuffix(".kt")}Kt"
-                    fileScopeAliases["$packageName.$facade"] = node
-                }
                 node
             }
         }
