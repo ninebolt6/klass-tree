@@ -11,6 +11,7 @@ import org.jetbrains.kotlin.psi.KtAnnotationEntry
 import org.jetbrains.kotlin.psi.KtArrayAccessExpression
 import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtCallableReferenceExpression
+import org.jetbrains.kotlin.psi.KtConstructorDelegationCall
 import org.jetbrains.kotlin.psi.KtDestructuringDeclarationEntry
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtForExpression
@@ -21,6 +22,7 @@ import org.jetbrains.kotlin.psi.KtOperationReferenceExpression
 import org.jetbrains.kotlin.psi.KtPropertyDelegate
 import org.jetbrains.kotlin.psi.KtQualifiedExpression
 import org.jetbrains.kotlin.psi.KtReferenceExpression
+import org.jetbrains.kotlin.psi.KtSuperTypeCallEntry
 import org.jetbrains.kotlin.psi.KtSuperTypeListEntry
 import org.jetbrains.kotlin.psi.KtTreeVisitorVoid
 import org.jetbrains.kotlin.psi.KtTypeReference
@@ -53,6 +55,12 @@ internal data class InheritanceCandidate(
 
 internal data class CallCandidate(
     override val element: KtCallExpression,
+) : ReferenceCandidate
+
+// KtConstructorDelegationReferenceExpression (`this`/`super` delegation) and
+// KtConstructorCalleeExpression (`class A : B(args)`) both implement KtResolvableCall.
+internal data class ConstructorCallCandidate(
+    override val element: KtResolvableCall,
 ) : ReferenceCandidate
 
 // The annotation-specific resolveSuccessfulSymbol overload returns the constructor rather than the class.
@@ -124,6 +132,18 @@ internal object ReferenceCollector {
                 override fun visitSuperTypeListEntry(superTypeListEntry: KtSuperTypeListEntry) {
                     result += InheritanceCandidate(superTypeListEntry)
                     super.visitSuperTypeListEntry(superTypeListEntry)
+                }
+
+                override fun visitSuperTypeCallEntry(call: KtSuperTypeCallEntry) {
+                    result += ConstructorCallCandidate(call.calleeExpression)
+                    super.visitSuperTypeCallEntry(call)
+                }
+
+                override fun visitConstructorDelegationCall(call: KtConstructorDelegationCall) {
+                    if (!call.isImplicit()) {
+                        call.calleeExpression?.let { result += ConstructorCallCandidate(it) }
+                    }
+                    super.visitConstructorDelegationCall(call)
                 }
 
                 override fun visitCallExpression(expression: KtCallExpression) {
