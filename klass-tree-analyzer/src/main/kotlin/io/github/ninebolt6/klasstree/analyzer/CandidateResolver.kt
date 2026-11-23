@@ -21,6 +21,7 @@ import org.jetbrains.kotlin.analysis.api.symbols.KaSymbolLocation
 import org.jetbrains.kotlin.analysis.api.symbols.KaSymbolOrigin
 import org.jetbrains.kotlin.analysis.api.symbols.KaTypeParameterSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.directlyOverriddenSymbols
+import org.jetbrains.kotlin.analysis.api.symbols.fakeOverrideOriginal
 import org.jetbrains.kotlin.resolution.KtResolvable
 
 @OptIn(KaExperimentalApi::class)
@@ -222,6 +223,7 @@ private fun KaSymbol.unwrapSubstitutionOverrides(): KaSymbol =
     generateSequence(this) { symbol ->
         if (symbol is KaCallableSymbol && symbol.origin == KaSymbolOrigin.SUBSTITUTION_OVERRIDE) {
             symbol.directlyOverriddenSymbols.singleOrNull()
+                ?: symbol.fakeOverrideOriginal.takeIf { it != symbol }
         } else {
             null
         }

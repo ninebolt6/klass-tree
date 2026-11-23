@@ -7,6 +7,43 @@ import kotlin.test.assertNotNull
 
 class AnalyzerGenericInheritanceTest {
     @Test
+    fun `inherited generic Java fields produce property access edges`() {
+        val result =
+            analyze(
+                module(
+                    ":app:main",
+                    "JBase.java" to "package com.example; public class JBase<T> { public T field; }",
+                    "Use.kt" to """
+                package com.example
+                class KChild : JBase<String>()
+                class Use { fun r(c: KChild) = c.field }
+                """,
+                ),
+            )
+
+        assertEquals(emptyList(), result.stats.resolution.analysisErrors)
+        assertNotNull(edge(result.graph, "com.example.Use", "com.example.JBase", EdgeKind.PROPERTY_ACCESS))
+    }
+
+    @Test
+    fun `direct generic Java fields produce property access edges`() {
+        val result =
+            analyze(
+                module(
+                    ":app:main",
+                    "JBase.java" to "package com.example; public class JBase<T> { public T field; }",
+                    "Use.kt" to """
+                package com.example
+                class Use { fun r() = JBase<String>().field }
+                """,
+                ),
+            )
+
+        assertEquals(emptyList(), result.stats.resolution.analysisErrors)
+        assertNotNull(edge(result.graph, "com.example.Use", "com.example.JBase", EdgeKind.PROPERTY_ACCESS))
+    }
+
+    @Test
     fun `multilevel generic members point to their declaring class`() {
         val result =
             analyze(
