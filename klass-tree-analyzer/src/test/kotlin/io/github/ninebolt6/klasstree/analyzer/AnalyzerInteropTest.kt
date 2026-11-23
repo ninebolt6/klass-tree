@@ -24,12 +24,12 @@ class AnalyzerInteropTest {
                     "Target.java" to "public class Target { public void ping() {} }",
                     "Caller.java" to """
                     public class Caller {
-                        void call() { kotlin.collections.CollectionsKt.listOf(new Target()).get(0).ping(); }
+                        void call() { kotlin.collections.CollectionsKt.<Target>listOf(new Target()).get(0).ping(); }
                     }
                 """,
                 ),
             )
-        assertNotNull(edge(result.graph, "Caller", "Target", EdgeKind.FUNCTION_CALL))
+        assertNotNull(edge(result.graph, "Caller", "Target", EdgeKind.FUNCTION_CALL), result.stats.toString())
     }
 
     @Test
