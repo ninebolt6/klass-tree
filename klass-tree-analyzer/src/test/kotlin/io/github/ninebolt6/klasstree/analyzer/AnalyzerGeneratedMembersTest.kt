@@ -28,8 +28,14 @@ class AnalyzerGeneratedMembersTest {
             )
 
         assertEquals(emptyList(), result.stats.resolution.analysisErrors)
-        assertNotNull(edge(result.graph, "com.example.Uses", "com.example.E", EdgeKind.FUNCTION_CALL))
-        assertNotNull(edge(result.graph, "com.example.Uses", "com.example.E", EdgeKind.PROPERTY_ACCESS))
+
+        // Each member resolves to a separate call site on the same merged edge.
+        val functionCallEdge =
+            assertNotNull(edge(result.graph, "com.example.Uses", "com.example.E", EdgeKind.FUNCTION_CALL))
+        assertEquals(setOf(6, 7), functionCallEdge.callSites.map { it.line }.toSet())
+        val propertyAccessEdge =
+            assertNotNull(edge(result.graph, "com.example.Uses", "com.example.E", EdgeKind.PROPERTY_ACCESS))
+        assertEquals(setOf(8, 9), propertyAccessEdge.callSites.map { it.line }.toSet())
     }
 
     @Test
