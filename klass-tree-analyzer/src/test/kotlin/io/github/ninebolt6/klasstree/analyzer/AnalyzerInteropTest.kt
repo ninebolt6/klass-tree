@@ -17,27 +17,25 @@ import kotlin.test.assertTrue
 class AnalyzerInteropTest {
     @Test
     fun `java call to a lowercase file facade reaches the packaged file scope node`() {
-        assertFileFacadeCall("helpers.kt", "HelpersKt", "com.example")
+        assertFileFacadeCall("helpers.kt", "HelpersKt")
     }
 
     @Test
     fun `java call to a sanitized file facade reaches the file scope node`() {
-        assertFileFacadeCall("some-helpers.kt", "Some_helpersKt", "com.example")
+        assertFileFacadeCall("some-helpers.kt", "Some_helpersKt")
     }
 
     private fun assertFileFacadeCall(
         fileName: String,
         facade: String,
-        packageName: String,
     ) {
-        val packageDirective = if (packageName.isEmpty()) "" else "package $packageName;"
         val result =
             analyze(
                 module(
                     ":app:main",
-                    fileName to "$packageDirective\nfun fn() {}",
+                    fileName to "package com.example\nfun fn() {}",
                     "Caller.java" to """
-                    $packageDirective
+                    package com.example;
                     public class Caller {
                         void call() { $facade.fn(); }
                     }

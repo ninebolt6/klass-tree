@@ -284,10 +284,8 @@ internal class DeclarationIndex(
                     )
                 builder.addNode(node)
                 // Kotlin top-level members are exposed to Java through JVM file facade classes.
-                if (packageName != null && info.file.name.endsWith(".kt")) {
-                    val facade =
-                        (info.file as? KtFile)?.jvmFacadeName()
-                            ?: "${info.file.name.removeSuffix(".kt")}Kt"
+                if (packageName != null && info.file is KtFile && info.file.name.endsWith(".kt")) {
+                    val facade = info.file.jvmFacadeName()
                     fileScopeAliases["$packageName.$facade"] = node
                 }
                 node
