@@ -20,6 +20,7 @@ import org.jetbrains.kotlin.analysis.api.symbols.KaSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaSymbolLocation
 import org.jetbrains.kotlin.analysis.api.symbols.KaSymbolOrigin
 import org.jetbrains.kotlin.analysis.api.symbols.KaTypeParameterSymbol
+import org.jetbrains.kotlin.analysis.api.symbols.allOverriddenSymbols
 import org.jetbrains.kotlin.analysis.api.symbols.directlyOverriddenSymbols
 import org.jetbrains.kotlin.analysis.api.symbols.fakeOverrideOriginal
 import org.jetbrains.kotlin.resolution.KtResolvable
@@ -222,8 +223,13 @@ context(session: KaSession)
 private fun KaSymbol.unwrapSubstitutionOverrides(): KaSymbol =
     generateSequence(this) { symbol ->
         if (symbol is KaCallableSymbol && symbol.origin == KaSymbolOrigin.SUBSTITUTION_OVERRIDE) {
-            symbol.directlyOverriddenSymbols.singleOrNull()
-                ?: symbol.fakeOverrideOriginal.takeIf { it != symbol }
+            val target =
+                symbol.directlyOverriddenSymbols.singleOrNull()
+                    ?: symbol.fakeOverrideOriginal.takeIf { it != symbol }
+            target?.takeIf {
+                val hierarchy = it.allOverriddenSymbols.toSet() + it
+                symbol.allOverriddenSymbols.all { overridden -> overridden in hierarchy }
+            }
         } else {
             null
         }

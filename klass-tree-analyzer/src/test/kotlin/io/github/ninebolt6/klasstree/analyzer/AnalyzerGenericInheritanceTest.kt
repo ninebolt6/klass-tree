@@ -7,6 +7,50 @@ import kotlin.test.assertNotNull
 
 class AnalyzerGenericInheritanceTest {
     @Test
+    fun `explicit generic overrides of multiple interfaces keep call edges`() {
+        val result =
+            analyze(
+                module(
+                    ":app:main",
+                    "Override.kt" to """
+                package com.example
+                interface A<T> { fun f(): T }
+                interface B<T> { fun f(): T }
+                open class Base<T>(val v: T) : A<T>, B<T> {
+                    override fun f(): T = v
+                }
+                class Child : Base<String>("x")
+                class Use { fun g(c: Child) = c.f() }
+                """,
+                ),
+            )
+
+        assertEquals(emptyList(), result.stats.resolution.analysisErrors)
+        assertNotNull(edge(result.graph, "com.example.Use", "com.example.Base", EdgeKind.FUNCTION_CALL))
+    }
+
+    @Test
+    fun `substituted intersections do not produce function call edges`() {
+        val result =
+            analyze(
+                module(
+                    ":app:main",
+                    "Intersection.kt" to """
+                package com.example
+                interface A<T> { fun f(): T }
+                interface B<T> { fun f(): T }
+                abstract class C<T> : A<T>, B<T>
+                abstract class D : C<String>()
+                class Use { fun g(d: D) = d.f() }
+                """,
+                ),
+            )
+
+        assertEquals(emptyList(), result.stats.resolution.analysisErrors)
+        assertEquals(emptyList(), result.graph.edges.filter { it.kind == EdgeKind.FUNCTION_CALL })
+    }
+
+    @Test
     fun `inherited generic Java fields produce property access edges`() {
         val result =
             analyze(
