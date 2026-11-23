@@ -16,6 +16,37 @@ import kotlin.test.assertTrue
 
 class AnalyzerTest {
     @Test
+    fun `inherited generic members point to their declaring class`() {
+        val result =
+            analyze(
+                module(
+                    ":app:main",
+                    "Inherited.kt" to """
+                package com.example
+
+                open class Base<T>(val prop: T) {
+                    fun value(): T = prop
+                }
+
+                class Child : Base<String>("value")
+
+                class Use {
+                    fun value(c: Child) = c.value()
+                    fun prop(c: Child) = c.prop
+                }
+                """,
+                ),
+            )
+
+        assertEquals(emptyList(), result.stats.resolution.analysisErrors)
+        for (kind in listOf(EdgeKind.FUNCTION_CALL, EdgeKind.PROPERTY_ACCESS)) {
+            val inheritedEdge = assertNotNull(edge(result.graph, "com.example.Use", "com.example.Base", kind))
+            assertEquals(1, inheritedEdge.callSites.size)
+            assertEquals(null, edge(result.graph, "com.example.Use", "com.example.Child", kind))
+        }
+    }
+
+    @Test
     fun `builds source nodes and semantic edges without external nodes`() {
         val result =
             analyze(
