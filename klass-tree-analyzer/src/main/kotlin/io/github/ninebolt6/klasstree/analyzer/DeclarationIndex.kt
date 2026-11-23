@@ -87,21 +87,40 @@ internal class DeclarationIndex(
         builder.addEdge(from.id, to.id, kind, site)
     }
 
-    private fun KtFile.jvmNameAnnotation(): String? =
-        annotationEntries
-            .firstOrNull { it.shortName?.asString() == "JvmName" }
-            ?.valueArguments
-            ?.firstOrNull()
-            ?.getArgumentExpression()
-            ?.text
-            ?.removeSurrounding("\"")
-
     private fun SourceFileInfo.packageName(): String =
         when (val file = file) {
             is KtFile -> file.packageFqName.asString()
             is PsiJavaFile -> file.packageName
             else -> ""
         }
+
+    private fun KtFile.jvmFacadeName(): String {
+        val explicitName =
+            annotationEntries
+                .firstOrNull { it.shortName?.asString() == "JvmName" }
+                ?.valueArguments
+                ?.firstOrNull()
+                ?.getArgumentExpression()
+                ?.text
+                ?.removeSurrounding("\"")
+        if (explicitName != null) return explicitName
+        val sanitized = name.substringBeforeLast('.').replace(Regex("[^\\p{L}\\p{Digit}]"), "_")
+        val prefix =
+            when {
+                sanitized.isEmpty() -> {
+                    "_"
+                }
+
+                Character.isJavaIdentifierStart(sanitized.first()) -> {
+                    sanitized.replaceFirstChar { it.toString().uppercase() }
+                }
+
+                else -> {
+                    "_$sanitized"
+                }
+            }
+        return "${prefix}Kt"
+    }
 
     private fun document(file: PsiFile): Document? {
         if (documents.containsKey(file)) return documents[file]
@@ -265,11 +284,10 @@ internal class DeclarationIndex(
                     )
                 builder.addNode(node)
                 // Kotlin top-level members are exposed to Java through JVM file facade classes.
-                if (packageName != null && info.file.name.endsWith(".kt")) {
-                    val facade =
-                        (info.file as? KtFile)?.jvmNameAnnotation()
-                            ?: "${info.file.name.removeSuffix(".kt")}Kt"
-                    fileScopeAliases["$packageName.$facade"] = node
+                if (info.file is KtFile) {
+                    val facade = info.file.jvmFacadeName()
+                    val fqName = if (packageName == null) facade else "$packageName.$facade"
+                    fileScopeAliases[fqName] = node
                 }
                 node
             }
