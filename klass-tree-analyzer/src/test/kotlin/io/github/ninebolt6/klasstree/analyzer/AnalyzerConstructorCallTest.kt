@@ -30,6 +30,8 @@ class AnalyzerConstructorCallTest {
         assertNotNull(edge(result.graph, "com.example.Child", "com.example.Base", EdgeKind.CONSTRUCTOR_CALL))
         assertNotNull(edge(result.graph, "com.example.Other", "com.example.Base", EdgeKind.CONSTRUCTOR_CALL))
         assertNotNull(edge(result.graph, "com.example.Other", "com.example.Base", EdgeKind.INHERITANCE))
+        // `this()` resolves to Child's own constructor and is dropped as a self-edge.
+        assertEquals(1, result.stats.resolution.selfEdgesSkipped)
         assertEquals(0, result.stats.resolution.unresolved)
         assertEquals(emptyList(), result.stats.resolution.analysisErrors)
     }
