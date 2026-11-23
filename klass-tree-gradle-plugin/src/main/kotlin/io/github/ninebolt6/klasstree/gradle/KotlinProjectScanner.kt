@@ -2,7 +2,6 @@ package io.github.ninebolt6.klasstree.gradle
 
 import org.gradle.api.GradleException
 import org.gradle.api.Project
-import org.gradle.api.artifacts.ProjectDependency
 import org.gradle.api.artifacts.component.ProjectComponentIdentifier
 import org.gradle.api.tasks.TaskProvider
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
@@ -50,11 +49,12 @@ internal object KotlinProjectScanner {
                     compilation.compileDependencyConfigurationName,
                 )
             val projectDependencyPaths =
-                dependencyConfiguration
-                    .get()
-                    .allDependencies
-                    .filterIsInstance<ProjectDependency>()
-                    .mapTo(LinkedHashSet()) { it.path }
+                dependencyConfiguration.map { configuration ->
+                    configuration.incoming.resolutionResult.allComponents
+                        .mapNotNull { it.id as? ProjectComponentIdentifier }
+                        .map { it.projectPath }
+                        .distinct()
+                }
             val associatedModuleIds =
                 compilation.allAssociatedCompilations
                     .mapTo(LinkedHashSet()) { moduleId(project.path, it.defaultSourceSet.name) }

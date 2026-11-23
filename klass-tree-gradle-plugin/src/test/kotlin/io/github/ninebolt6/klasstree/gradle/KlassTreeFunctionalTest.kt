@@ -75,13 +75,19 @@ class KlassTreeFunctionalTest {
                     .parseToJsonElement(
                         projectDir.resolve("build/klass-tree/analysis-spec.json").toFile().readText(),
                     ).jsonObject
-            val rootModule = spec.getValue("modules").jsonArray.single { it.jsonObject["projectPath"]?.jsonPrimitive?.content == ":" }
+            val rootModule =
+                spec.getValue("modules").jsonArray.single {
+                    it.jsonObject["projectPath"]?.jsonPrimitive?.content == ":"
+                }
             val dependencies =
                 rootModule.jsonObject
                     .getValue("dependencies")
                     .jsonArray
                     .map { it.jsonPrimitive.content }
-            val graph = Json.parseToJsonElement(projectDir.resolve("build/klass-tree/graph.json").toFile().readText()).jsonObject
+            val graph =
+                Json
+                    .parseToJsonElement(projectDir.resolve("build/klass-tree/graph.json").toFile().readText())
+                    .jsonObject
             assertEquals(
                 (configuration == "api") to (configuration == "api"),
                 (":shared:main" in dependencies) to
