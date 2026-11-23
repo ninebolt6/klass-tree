@@ -9,6 +9,7 @@ import com.intellij.psi.search.GlobalSearchScope
 import org.jetbrains.kotlin.analysis.api.KaPlatformInterface
 import org.jetbrains.kotlin.analysis.api.platform.projectStructure.KaResolutionScopeProvider
 import org.jetbrains.kotlin.analysis.api.platform.projectStructure.KotlinProjectStructureProvider
+import org.jetbrains.kotlin.analysis.api.projectStructure.KaSourceModule
 
 @OptIn(KaPlatformInterface::class)
 internal class ModuleResolveScopeManager(
@@ -16,7 +17,11 @@ internal class ModuleResolveScopeManager(
 ) : ResolveScopeManager() {
     override fun getResolveScope(element: PsiElement): GlobalSearchScope {
         val module = KotlinProjectStructureProvider.getModule(project, element, null)
-        return KaResolutionScopeProvider.getInstance(project).getResolutionScope(module)
+        return if (module is KaSourceModule) {
+            KaResolutionScopeProvider.getInstance(project).getResolutionScope(module)
+        } else {
+            GlobalSearchScope.allScope(project)
+        }
     }
 
     override fun getDefaultResolveScope(file: VirtualFile): GlobalSearchScope =
