@@ -16,6 +16,28 @@ import kotlin.test.assertTrue
 
 class AnalyzerTest {
     @Test
+    fun `delegated members do not produce call edges to the interface`() {
+        val result =
+            analyze(
+                module(
+                    ":app:main",
+                    "Delegation.kt" to """
+                package com.example
+
+                interface I { fun f() }
+                class Impl(d: I) : I by d
+                class Use { fun g(x: Impl) = x.f() }
+                """,
+                ),
+            )
+
+        assertEquals(emptyList(), result.stats.resolution.analysisErrors)
+        assertEquals(null, edge(result.graph, "com.example.Use", "com.example.I", EdgeKind.FUNCTION_CALL))
+        assertEquals(null, edge(result.graph, "com.example.Use", "com.example.Impl", EdgeKind.FUNCTION_CALL))
+        assertEquals(emptyList(), result.graph.edges.filter { it.kind == EdgeKind.FUNCTION_CALL })
+    }
+
+    @Test
     fun `inherited generic members point to their declaring class`() {
         val result =
             analyze(

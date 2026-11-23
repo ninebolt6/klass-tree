@@ -162,7 +162,12 @@ internal class CandidateResolver(
             stats.unresolved++
             return
         }
-        val originalSymbol = (symbol as? KaCallableSymbol)?.fakeOverrideOriginal ?: symbol
+        val originalSymbol =
+            if (symbol is KaCallableSymbol && symbol.origin == KaSymbolOrigin.SUBSTITUTION_OVERRIDE) {
+                symbol.fakeOverrideOriginal
+            } else {
+                symbol
+            }
         when (dispositionOf(originalSymbol)) {
             SymbolDisposition.SKIPPED -> {
                 stats.skipped++
