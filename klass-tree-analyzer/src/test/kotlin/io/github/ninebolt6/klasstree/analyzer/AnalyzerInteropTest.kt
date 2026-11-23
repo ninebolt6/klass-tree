@@ -36,7 +36,10 @@ class AnalyzerInteropTest {
                 """,
                     "Read.kt" to "package com.example.read\nfun read(b: com.example.Child) = b.name",
                     "Write.kt" to "package com.example.write\nfun write(b: com.example.Child) { b.name = \"x\" }",
-                    "Compound.kt" to "package com.example.compound\nfun append(b: com.example.Child) { b.name += \"x\" }",
+                    "Compound.kt" to """
+                    package com.example.compound
+                    fun append(b: com.example.Child) { b.name += "x" }
+                """,
                 ),
             )
         val targets =
@@ -44,8 +47,11 @@ class AnalyzerInteropTest {
                 val from = result.graph.nodes.single { it.fqName == "com.example.$operation" }
                 result.graph.edges
                     .filter { it.from == from.id && it.kind == EdgeKind.PROPERTY_ACCESS }
-                    .map { edge -> result.graph.nodes.single { it.id == edge.to }.fqName }
-                    .toSet()
+                    .map { edge ->
+                        result.graph.nodes
+                            .single { it.id == edge.to }
+                            .fqName
+                    }.toSet()
             }
         assertEquals(
             mapOf(
