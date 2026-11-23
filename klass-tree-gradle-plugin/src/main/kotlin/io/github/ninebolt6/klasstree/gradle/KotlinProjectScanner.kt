@@ -33,56 +33,52 @@ internal object KotlinProjectScanner {
             } else {
                 null
             } ?: return KotlinProjectScan(emptyList(), emptyList())
-        val sourceDirectories = mutableListOf<FileCollection>()
-        val moduleTasks = mutableListOf<TaskProvider<KlassTreeModuleSpecTask>>()
-        val seenSourceSets = mutableSetOf<String>()
-
-        kotlin.target.compilations.forEach { compilation ->
-            if (compilation.platformType != KotlinPlatformType.jvm) return@forEach
-            val sourceSet = compilation.defaultSourceSet
-            if (!includeTests && sourceSet.name != "main") return@forEach
-            if (!seenSourceSets.add(sourceSet.name)) return@forEach
-
-            val directories = sourceDirectories(project, sourceSet, includeJavaSources)
-            sourceDirectories.add(directories)
-            val dependencyConfiguration =
-                project.configurations.named(
-                    compilation.compileDependencyConfigurationName,
-                )
-            val projectDependencyPaths =
-                dependencyConfiguration
-                    .get()
-                    .allDependencies
-                    .filterIsInstance<ProjectDependency>()
-                    .mapTo(LinkedHashSet()) { it.path }
-            val associatedModuleIds =
-                compilation.allAssociatedCompilations
-                    .mapTo(LinkedHashSet()) { moduleId(project.path, it.defaultSourceSet.name) }
-            val taskName = "klassTreeModuleSpec${sourceSet.name.replaceFirstChar { it.uppercase() }}"
-            val moduleTask =
-                project.tasks.register(taskName, KlassTreeModuleSpecTask::class.java) { task ->
-                    task.projectPath.set(project.path)
-                    task.sourceSetName.set(sourceSet.name)
-                    task.moduleId.set(moduleId(project.path, sourceSet.name))
-                    task.moduleName.set(moduleName(project.path, sourceSet.name))
-                    task.projectDependencyPaths.set(projectDependencyPaths)
-                    task.associatedModuleIds.set(associatedModuleIds)
-                    task.sourceDirectories.from(directories)
-                    task.classpath.from(
-                        dependencyConfiguration.map { configuration ->
-                            configuration.incoming
-                                .artifactView { view ->
-                                    view.componentFilter { id -> id !is ProjectComponentIdentifier }
-                                }.files
-                        },
-                    )
-                    task.outputFile.set(
-                        project.layout.buildDirectory.file("klass-tree/modules/${sourceSet.name}.json"),
-                    )
+        val modules =
+            kotlin.target.compilations
+                .filter { it.platformType == KotlinPlatformType.jvm }
+                .filter { includeTests || it.defaultSourceSet.name == "main" }
+                .distinctBy { it.defaultSourceSet.name }
+                .map { compilation ->
+                    val sourceSet = compilation.defaultSourceSet
+                    val directories = sourceDirectories(project, sourceSet, includeJavaSources)
+                    val dependencyConfiguration =
+                        project.configurations.named(
+                            compilation.compileDependencyConfigurationName,
+                        )
+                    val projectDependencyPaths =
+                        dependencyConfiguration
+                            .get()
+                            .allDependencies
+                            .filterIsInstance<ProjectDependency>()
+                            .mapTo(LinkedHashSet()) { it.path }
+                    val associatedModuleIds =
+                        compilation.allAssociatedCompilations
+                            .mapTo(LinkedHashSet()) { moduleId(project.path, it.defaultSourceSet.name) }
+                    val taskName = "klassTreeModuleSpec${sourceSet.name.replaceFirstChar { it.uppercase() }}"
+                    val moduleTask =
+                        project.tasks.register(taskName, KlassTreeModuleSpecTask::class.java) { task ->
+                            task.projectPath.set(project.path)
+                            task.sourceSetName.set(sourceSet.name)
+                            task.moduleId.set(moduleId(project.path, sourceSet.name))
+                            task.moduleName.set(moduleName(project.path, sourceSet.name))
+                            task.projectDependencyPaths.set(projectDependencyPaths)
+                            task.associatedModuleIds.set(associatedModuleIds)
+                            task.sourceDirectories.from(directories)
+                            task.classpath.from(
+                                dependencyConfiguration.map { configuration ->
+                                    configuration.incoming
+                                        .artifactView { view ->
+                                            view.componentFilter { id -> id !is ProjectComponentIdentifier }
+                                        }.files
+                                },
+                            )
+                            task.outputFile.set(
+                                project.layout.buildDirectory.file("klass-tree/modules/${sourceSet.name}.json"),
+                            )
+                        }
+                    directories to moduleTask
                 }
-            moduleTasks += moduleTask
-        }
-        return KotlinProjectScan(sourceDirectories.toList(), moduleTasks)
+        return KotlinProjectScan(modules.map { it.first }, modules.map { it.second })
     }
 
     private fun requireSupportedVersion(project: Project) {
@@ -98,21 +94,24 @@ internal object KotlinProjectScanner {
         sourceSet: org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet,
         includeJavaSources: Boolean,
     ): FileCollection {
-        val directories =
-            project.files(
+        val javaDirectories =
+            if (includeJavaSources) {
+                project.extensions
+                    .findByType(org.gradle.api.plugins.JavaPluginExtension::class.java)
+                    ?.sourceSets
+                    ?.findByName(sourceSet.name)
+                    ?.java
+                    ?.sourceDirectories
+            } else {
+                null
+            }
+        return project.files(
+            listOfNotNull(
                 sourceSet.kotlin.sourceDirectories,
                 sourceSet.generatedKotlin.sourceDirectories,
-            )
-        if (includeJavaSources) {
-            project.extensions
-                .findByType(org.gradle.api.plugins.JavaPluginExtension::class.java)
-                ?.sourceSets
-                ?.findByName(sourceSet.name)
-                ?.java
-                ?.sourceDirectories
-                ?.let { directories.from(it) }
-        }
-        return directories
+                javaDirectories,
+            ),
+        )
     }
 
     private fun moduleName(
