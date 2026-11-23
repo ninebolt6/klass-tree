@@ -553,6 +553,29 @@ class AnalyzerTest {
     }
 
     @Test
+    fun `sam constructor calls record a constructor call edge`() {
+        val result =
+            analyze(
+                module(
+                    ":app:main",
+                    "App.kt" to """
+                package com.example
+
+                fun interface Action {
+                    fun run()
+                }
+
+                class Job {
+                    fun schedule(): Action = Action { }
+                }
+                """,
+                ),
+            )
+
+        assertNotNull(edge(result.graph, "com.example.Job", "com.example.Action", EdgeKind.CONSTRUCTOR_CALL))
+    }
+
+    @Test
     fun `kotlin scripts are not analyzed`() {
         val result =
             analyze(

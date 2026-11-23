@@ -15,6 +15,7 @@ import org.jetbrains.kotlin.analysis.api.symbols.KaJavaFieldSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaNamedFunctionSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaPackageSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaPropertySymbol
+import org.jetbrains.kotlin.analysis.api.symbols.KaSamConstructorSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaSymbolLocation
 import org.jetbrains.kotlin.analysis.api.symbols.KaSymbolOrigin
@@ -57,6 +58,7 @@ internal class CandidateResolver(
         handleCalls(candidate.element.resolveSuccessfulCall(), candidate.element) { symbol ->
             when (symbol) {
                 is KaConstructorSymbol -> EdgeKind.CONSTRUCTOR_CALL
+                is KaSamConstructorSymbol -> EdgeKind.CONSTRUCTOR_CALL
                 is KaNamedFunctionSymbol -> EdgeKind.FUNCTION_CALL
                 is KaPropertySymbol -> EdgeKind.PROPERTY_ACCESS
                 else -> null
@@ -188,6 +190,10 @@ internal class CandidateResolver(
     private fun dispositionForOrigin(symbol: KaSymbol): SymbolDisposition =
         when (symbol.origin) {
             KaSymbolOrigin.SOURCE, KaSymbolOrigin.JAVA_SOURCE -> {
+                SymbolDisposition.RECORD
+            }
+
+            KaSymbolOrigin.SAM_CONSTRUCTOR -> {
                 SymbolDisposition.RECORD
             }
 
