@@ -3,6 +3,7 @@ package io.github.ninebolt6.klasstree.gradle
 import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.api.artifacts.component.ProjectComponentIdentifier
+import org.gradle.api.artifacts.result.ResolutionResult
 import org.gradle.api.tasks.TaskProvider
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmExtension
@@ -50,10 +51,7 @@ internal object KotlinProjectScanner {
                 )
             val projectDependencyPaths =
                 dependencyConfiguration.map { configuration ->
-                    configuration.incoming.resolutionResult.allComponents
-                        .mapNotNull { it.id as? ProjectComponentIdentifier }
-                        .map { it.projectPath }
-                        .distinct()
+                    localProjectDependencyPaths(configuration.incoming.resolutionResult)
                 }
             val associatedModuleIds =
                 compilation.allAssociatedCompilations
@@ -83,6 +81,15 @@ internal object KotlinProjectScanner {
             moduleTasks += moduleTask
         }
         return KotlinProjectScan(sourceDirectories.toList(), moduleTasks)
+    }
+
+    private fun localProjectDependencyPaths(resolutionResult: ResolutionResult): List<String> {
+        val rootId = resolutionResult.rootComponent.get().id as ProjectComponentIdentifier
+        return resolutionResult.allComponents
+            .mapNotNull { it.id as? ProjectComponentIdentifier }
+            .filter { it != rootId && it.build.buildPath == rootId.build.buildPath }
+            .map { it.projectPath }
+            .distinct()
     }
 
     private fun requireSupportedVersion(project: Project) {

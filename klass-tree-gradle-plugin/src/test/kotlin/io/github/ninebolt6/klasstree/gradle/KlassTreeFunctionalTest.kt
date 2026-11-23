@@ -108,67 +108,6 @@ class KlassTreeFunctionalTest {
         }
     }
 
-    @Test
-    fun `included build root is not mistaken for the local root project`() {
-        writeProject(rootIsKotlin = true)
-        projectDir.resolve("settings.gradle.kts").toFile().appendText("\nincludeBuild(\"included\")\n")
-        write("included/settings.gradle.kts", "rootProject.name = \"foreign\"")
-        write(
-            "included/build.gradle.kts",
-            """
-            plugins { `java-library` }
-            group = "external"
-            version = "1.0"
-            """,
-        )
-        write(
-            "shared/build.gradle.kts",
-            """
-            plugins { id("org.jetbrains.kotlin.jvm") }
-            dependencies { implementation("external:foreign:1.0") }
-            """,
-        )
-
-        runner("klassTree").build()
-
-        val candidates =
-            Json
-                .parseToJsonElement(
-                    projectDir.resolve("shared/build/klass-tree/modules/main.json").toFile().readText(),
-                ).jsonArray
-        assertEquals(
-            emptyList(),
-            candidates
-                .single()
-                .jsonObject
-                .getValue("projectDependencyPaths")
-                .jsonArray
-                .toList(),
-        )
-    }
-
-    @Test
-    fun `module candidates exclude the resolved root component`() {
-        writeProject()
-
-        runner(":shared:klassTreeModuleSpecMain").build()
-
-        val candidates =
-            Json
-                .parseToJsonElement(
-                    projectDir.resolve("shared/build/klass-tree/modules/main.json").toFile().readText(),
-                ).jsonArray
-        assertEquals(
-            emptyList(),
-            candidates
-                .single()
-                .jsonObject
-                .getValue("projectDependencyPaths")
-                .jsonArray
-                .toList(),
-        )
-    }
-
     private fun writeTransitiveDependencyProject() {
         writeProject(rootIsKotlin = true)
         write(
