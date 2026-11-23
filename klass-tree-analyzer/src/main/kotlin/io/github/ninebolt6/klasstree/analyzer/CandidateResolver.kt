@@ -129,6 +129,7 @@ internal class CandidateResolver(
         }
     }
 
+    context(session: KaSession)
     private fun handleCalls(
         call: KaSimpleOrMultiCall?,
         element: PsiElement,
@@ -149,6 +150,7 @@ internal class CandidateResolver(
         }
     }
 
+    context(session: KaSession)
     private fun handleSymbol(
         symbol: KaSymbol?,
         element: PsiElement,
@@ -158,7 +160,8 @@ internal class CandidateResolver(
             stats.unresolved++
             return
         }
-        when (dispositionOf(symbol)) {
+        val target = with(session) { (symbol as? KaConstructorSymbol)?.originalConstructorIfTypeAliased } ?: symbol
+        when (dispositionOf(target)) {
             SymbolDisposition.SKIPPED -> {
                 stats.skipped++
             }
@@ -168,7 +171,7 @@ internal class CandidateResolver(
             }
 
             SymbolDisposition.RECORD -> {
-                val to = index.nodeForSymbol(symbol)
+                val to = index.nodeForSymbol(target)
                 if (to == null) {
                     stats.skipped++
                 } else {
