@@ -15,6 +15,7 @@ import io.github.ninebolt6.klasstree.graph.moduleLabel
 import org.jetbrains.kotlin.analysis.api.symbols.KaClassLikeSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaConstructorSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaSymbol
+import org.jetbrains.kotlin.fileClasses.JvmFileClassUtil
 import org.jetbrains.kotlin.psi.KtClass
 import org.jetbrains.kotlin.psi.KtClassOrObject
 import org.jetbrains.kotlin.psi.KtEnumEntry
@@ -93,34 +94,6 @@ internal class DeclarationIndex(
             is PsiJavaFile -> file.packageName
             else -> ""
         }
-
-    private fun KtFile.jvmFacadeName(): String {
-        val explicitName =
-            annotationEntries
-                .firstOrNull { it.shortName?.asString() == "JvmName" }
-                ?.valueArguments
-                ?.firstOrNull()
-                ?.getArgumentExpression()
-                ?.text
-                ?.removeSurrounding("\"")
-        if (explicitName != null) return explicitName
-        val sanitized = name.substringBeforeLast('.').replace(Regex("[^\\p{L}\\p{Digit}]"), "_")
-        val prefix =
-            when {
-                sanitized.isEmpty() -> {
-                    "_"
-                }
-
-                Character.isJavaIdentifierStart(sanitized.first()) -> {
-                    sanitized.replaceFirstChar { it.toString().uppercase() }
-                }
-
-                else -> {
-                    "_$sanitized"
-                }
-            }
-        return "${prefix}Kt"
-    }
 
     private fun document(file: PsiFile): Document? {
         if (documents.containsKey(file)) return documents[file]
@@ -285,8 +258,8 @@ internal class DeclarationIndex(
                 builder.addNode(node)
                 // Kotlin top-level members are exposed to Java through JVM file facade classes.
                 if (packageName != null && info.file is KtFile && info.file.name.endsWith(".kt")) {
-                    val facade = info.file.jvmFacadeName()
-                    fileScopeAliases["$packageName.$facade"] = node
+                    val facade = JvmFileClassUtil.getFileClassInfoNoResolve(info.file).facadeClassFqName
+                    fileScopeAliases[facade.asString()] = node
                 }
                 node
             }
