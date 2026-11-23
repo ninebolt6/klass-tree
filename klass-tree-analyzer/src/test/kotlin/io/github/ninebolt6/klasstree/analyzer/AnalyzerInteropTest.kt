@@ -53,6 +53,37 @@ class AnalyzerInteropTest {
     }
 
     @Test
+    fun `java calls to default package facades reach the file scope node`() {
+        for (annotation in listOf("", "@file:JvmName(\"CustomHelpers\")")) {
+            val facade = if (annotation.isEmpty()) "HelpersKt" else "CustomHelpers"
+            val result =
+                analyze(
+                    module(
+                        ":app:main",
+                        "Helpers.kt" to """
+                        $annotation
+
+                        fun topLevel() {}
+                    """,
+                        "Caller.java" to """
+                        public class Caller {
+                            void call() { $facade.topLevel(); }
+                        }
+                    """,
+                    ),
+                )
+            val fileScope = result.graph.nodes.single { it.kind == NodeKind.FILE_SCOPE }
+            val caller = result.graph.nodes.single { it.fqName == "Caller" }
+            assertTrue(
+                result.graph.edges.any {
+                    it.from == caller.id && it.to == fileScope.id && it.kind == EdgeKind.FUNCTION_CALL
+                },
+                "$facade calls must resolve to the FILE_SCOPE node, got edges " + result.graph.edges,
+            )
+        }
+    }
+
+    @Test
     fun `java call to a JvmName facade reaches the file scope node`() {
         val result =
             analyze(
