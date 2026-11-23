@@ -4,6 +4,7 @@ import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiClassType
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiField
+import com.intellij.psi.PsiMember
 import com.intellij.psi.PsiMethod
 import com.intellij.psi.PsiMethodCallExpression
 import com.intellij.psi.PsiNewExpression
@@ -11,6 +12,8 @@ import com.intellij.psi.PsiReferenceExpression
 import com.intellij.psi.PsiVariable
 import com.intellij.psi.util.PsiTreeUtil
 import io.github.ninebolt6.klasstree.graph.EdgeKind
+import org.jetbrains.kotlin.asJava.classes.KtLightClassForFacade
+import org.jetbrains.kotlin.asJava.elements.KtLightMember
 
 internal class JavaCandidateResolver(
     private val index: DeclarationIndex,
@@ -78,7 +81,7 @@ internal class JavaCandidateResolver(
         when (val resolved = candidate.element.resolve()) {
             is PsiField -> {
                 handleResolved(
-                    resolved.containingClass,
+                    resolved,
                     candidate.element,
                     EdgeKind.PROPERTY_ACCESS,
                 )
@@ -104,7 +107,7 @@ internal class JavaCandidateResolver(
             stats.unresolved++
         } else {
             handleResolved(
-                method.containingClass,
+                method,
                 candidate.element,
                 EdgeKind.CALLABLE_REFERENCE,
             )
@@ -164,7 +167,7 @@ internal class JavaCandidateResolver(
                 EdgeKind.FUNCTION_CALL
             }
         handleResolved(
-            target,
+            method ?: target,
             element,
             kind,
         )
@@ -199,10 +202,19 @@ internal class JavaCandidateResolver(
     }
 
     private fun handleResolved(
-        psiClass: PsiClass?,
+        member: PsiMember?,
         element: PsiElement,
         kind: EdgeKind,
     ) {
+        val psiClass = if (member is PsiClass) member else member?.containingClass
+        if (psiClass is KtLightClassForFacade) {
+            val file =
+                (member as? KtLightMember<*>)?.kotlinOrigin?.containingKtFile
+                    ?: psiClass.files.singleOrNull()
+            val to = file?.let { index.nodeForElement(it) }
+            if (to == null) stats.resolvedExternal++ else edges.record(to, element, kind)
+            return
+        }
         val fqName = psiClass?.qualifiedName
         if (fqName == null) {
             if (psiClass == null) stats.unresolved++ else stats.skipped++
@@ -211,8 +223,8 @@ internal class JavaCandidateResolver(
         val to = index.nodeForQualifiedName(fqName)
         if (to == null) {
             stats.resolvedExternal++
-            return
+        } else {
+            edges.record(to, element, kind)
         }
-        edges.record(to, element, kind)
     }
 }
