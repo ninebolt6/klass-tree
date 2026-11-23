@@ -20,7 +20,7 @@ import org.jetbrains.kotlin.analysis.api.symbols.KaSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaSymbolLocation
 import org.jetbrains.kotlin.analysis.api.symbols.KaSymbolOrigin
 import org.jetbrains.kotlin.analysis.api.symbols.KaTypeParameterSymbol
-import org.jetbrains.kotlin.analysis.api.symbols.fakeOverrideOriginal
+import org.jetbrains.kotlin.analysis.api.symbols.directlyOverriddenSymbols
 import org.jetbrains.kotlin.resolution.KtResolvable
 
 @OptIn(KaExperimentalApi::class)
@@ -162,12 +162,7 @@ internal class CandidateResolver(
             stats.unresolved++
             return
         }
-        val originalSymbol =
-            if (symbol is KaCallableSymbol && symbol.origin == KaSymbolOrigin.SUBSTITUTION_OVERRIDE) {
-                symbol.fakeOverrideOriginal
-            } else {
-                symbol
-            }
+        val originalSymbol = symbol.unwrapSubstitutionOverrides()
         when (dispositionOf(originalSymbol)) {
             SymbolDisposition.SKIPPED -> {
                 stats.skipped++
@@ -187,6 +182,16 @@ internal class CandidateResolver(
             }
         }
     }
+
+    context(session: KaSession)
+    private fun KaSymbol.unwrapSubstitutionOverrides(): KaSymbol =
+        generateSequence(this) { symbol ->
+            if (symbol is KaCallableSymbol && symbol.origin == KaSymbolOrigin.SUBSTITUTION_OVERRIDE) {
+                symbol.directlyOverriddenSymbols.singleOrNull()
+            } else {
+                null
+            }
+        }.last()
 
     private fun dispositionOf(symbol: KaSymbol): SymbolDisposition =
         when {
