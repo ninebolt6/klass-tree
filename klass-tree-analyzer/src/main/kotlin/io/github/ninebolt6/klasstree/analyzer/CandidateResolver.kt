@@ -247,12 +247,9 @@ private fun KaSymbol.unwrapSubstitutionOverrides(): KaSymbol =
             return@generateSequence null
         }
         when (symbol.origin) {
-            // Members provided by `by`-delegation fake-override the interface member they forward to.
-            KaSymbolOrigin.DELEGATED -> {
-                symbol.fakeOverrideOriginal
-            }
-
-            KaSymbolOrigin.SUBSTITUTION_OVERRIDE -> {
+            // Members provided by `by`-delegation override the interface member they forward to;
+            // unwrapping must not collapse multi-parent intersections to a single declaring parent.
+            KaSymbolOrigin.DELEGATED, KaSymbolOrigin.SUBSTITUTION_OVERRIDE -> {
                 val parent =
                     if (symbol is KaJavaFieldSymbol) {
                         symbol.fakeOverrideOriginal

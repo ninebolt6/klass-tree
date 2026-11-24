@@ -83,6 +83,27 @@ class AnalyzerDelegationTest {
     }
 
     @Test
+    fun `delegated calls to a member inherited from two parents record no edge`() {
+        val result =
+            analyze(
+                module(
+                    ":app:main",
+                    "Intersection.kt" to """
+                package com.example
+                interface A { fun f() }
+                interface B { fun f() }
+                interface I : A, B
+                class X(d: I) : I by d
+                class Use { fun g(x: X) = x.f() }
+                """,
+                ),
+            )
+
+        assertEquals(emptyList(), result.stats.resolution.analysisErrors)
+        assertEquals(emptyList(), result.graph.edges.filter { it.kind == EdgeKind.FUNCTION_CALL })
+    }
+
+    @Test
     fun `generic delegated member calls land on the declaring interface`() {
         val result =
             analyze(
