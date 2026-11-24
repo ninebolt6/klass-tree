@@ -28,11 +28,12 @@ class AnalyzerImplicitInvokeTest {
                 val cb: () -> Unit = {}
 
                 class Uses {
-                    fun use(h: Holder) {
+                    fun use(h: Holder, nh: Holder?) {
                         h.cb()
                         Bus.cb()
                         cb()
                         h.f()
+                        nh?.cb()
                     }
                 }
                 """,
@@ -44,7 +45,7 @@ class AnalyzerImplicitInvokeTest {
                 edge(result.graph, "com.example.Uses", "com.example.Holder", EdgeKind.PROPERTY_ACCESS),
                 "h.cb() and h.f() must access the property",
             )
-        assertEquals(2, holderEdge.callSites.size, "one call site per invoked property")
+        assertEquals(3, holderEdge.callSites.size, "one call site per invoked property, including the safe call")
         assertNotNull(
             edge(result.graph, "com.example.Uses", "com.example.Bus", EdgeKind.PROPERTY_ACCESS),
             "Bus.cb() must access the property",
@@ -90,6 +91,38 @@ class AnalyzerImplicitInvokeTest {
                 edge(result.graph, "com.example.Uses", "com.example.Holder", EdgeKind.PROPERTY_ACCESS),
             )
         assertEquals(2, propertyEdge.callSites.size, "one call site per explicit form, no duplicates")
+        assertEquals(emptyList(), result.stats.resolution.analysisErrors)
+    }
+
+    @Test
+    fun `calling a function-typed Java field records a property access edge`() {
+        val result =
+            analyze(
+                module(
+                    ":app:main",
+                    "JHolder.java" to """
+                package com.example;
+
+                public class JHolder {
+                    public kotlin.jvm.functions.Function0<kotlin.Unit> cb = () -> {};
+                }
+                """,
+                    "Uses.kt" to """
+                package com.example
+
+                class Uses {
+                    fun use(jh: JHolder) {
+                        jh.cb()
+                    }
+                }
+                """,
+                ),
+            )
+
+        assertNotNull(
+            edge(result.graph, "com.example.Uses", "com.example.JHolder", EdgeKind.PROPERTY_ACCESS),
+            "jh.cb() must access the Java field",
+        )
         assertEquals(emptyList(), result.stats.resolution.analysisErrors)
     }
 }

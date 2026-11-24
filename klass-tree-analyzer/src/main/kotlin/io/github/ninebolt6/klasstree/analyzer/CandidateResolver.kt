@@ -83,8 +83,10 @@ internal class CandidateResolver(
         // `FunctionN.invoke` (or fails to resolve at all for receiver-typed properties), and the
         // callee name is never collected as a property, so it needs its own edge.
         val callee = (element as? KtCallExpression)?.calleeExpression as? KtNameReferenceExpression
-        val property = callee?.resolveSuccessfulSymbol() as? KaPropertySymbol
-        if (property != null) handleSymbol(property, callee, EdgeKind.PROPERTY_ACCESS)
+        val symbol = callee?.resolveSuccessfulSymbol()
+        if (symbol is KaPropertySymbol || symbol is KaJavaFieldSymbol) {
+            handleSymbol(symbol, callee, EdgeKind.PROPERTY_ACCESS)
+        }
     }
 
     context(session: KaSession)
