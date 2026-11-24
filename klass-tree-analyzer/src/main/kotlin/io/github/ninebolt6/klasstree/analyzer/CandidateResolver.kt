@@ -178,7 +178,8 @@ internal class CandidateResolver(
             stats.unresolved++
             return
         }
-        val originalSymbol = symbol.unwrapSubstitutionOverrides()
+        val aliasTarget = with(session) { (symbol as? KaConstructorSymbol)?.originalConstructorIfTypeAliased } ?: symbol
+        val originalSymbol = aliasTarget.unwrapSubstitutionOverrides()
         when (dispositionOf(originalSymbol)) {
             SymbolDisposition.SKIPPED -> {
                 stats.skipped++
