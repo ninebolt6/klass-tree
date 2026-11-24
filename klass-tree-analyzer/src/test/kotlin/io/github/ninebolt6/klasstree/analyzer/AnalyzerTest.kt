@@ -16,7 +16,7 @@ import kotlin.test.assertTrue
 
 class AnalyzerTest {
     @Test
-    fun `delegated members do not produce call edges to the interface`() {
+    fun `delegated members produce call edges to the interface`() {
         val result =
             analyze(
                 module(
@@ -32,9 +32,8 @@ class AnalyzerTest {
             )
 
         assertEquals(emptyList(), result.stats.resolution.analysisErrors)
-        assertEquals(null, edge(result.graph, "com.example.Use", "com.example.I", EdgeKind.FUNCTION_CALL))
+        assertNotNull(edge(result.graph, "com.example.Use", "com.example.I", EdgeKind.FUNCTION_CALL))
         assertEquals(null, edge(result.graph, "com.example.Use", "com.example.Impl", EdgeKind.FUNCTION_CALL))
-        assertEquals(emptyList(), result.graph.edges.filter { it.kind == EdgeKind.FUNCTION_CALL })
     }
 
     @Test

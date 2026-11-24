@@ -243,16 +243,29 @@ internal class CandidateResolver(
 context(session: KaSession)
 private fun KaSymbol.unwrapSubstitutionOverrides(): KaSymbol =
     generateSequence(this) { symbol ->
-        if (symbol !is KaCallableSymbol || symbol.origin != KaSymbolOrigin.SUBSTITUTION_OVERRIDE) {
+        if (symbol !is KaCallableSymbol) {
             return@generateSequence null
         }
-        val parent =
-            if (symbol is KaJavaFieldSymbol) {
+        when (symbol.origin) {
+            // Members provided by `by`-delegation fake-override the interface member they forward to.
+            KaSymbolOrigin.DELEGATED -> {
                 symbol.fakeOverrideOriginal
-            } else {
-                symbol.directlyOverriddenSymbols.singleOrNull()
             }
-        parent?.takeIf { it.coversOverridesOf(symbol) }
+
+            KaSymbolOrigin.SUBSTITUTION_OVERRIDE -> {
+                val parent =
+                    if (symbol is KaJavaFieldSymbol) {
+                        symbol.fakeOverrideOriginal
+                    } else {
+                        symbol.directlyOverriddenSymbols.singleOrNull()
+                    }
+                parent?.takeIf { it.coversOverridesOf(symbol) }
+            }
+
+            else -> {
+                null
+            }
+        }
     }.last()
 
 /** Covers every overridden declaration so unwrapping preserves inherited parents, e.g. substituted intersections. */

@@ -114,7 +114,7 @@ class AnalyzerGenericInheritanceTest {
     }
 
     @Test
-    fun `inherited generic delegated members do not produce call edges`() {
+    fun `inherited generic delegated members land on the declaring interface`() {
         val result =
             analyze(
                 module(
@@ -131,7 +131,7 @@ class AnalyzerGenericInheritanceTest {
             )
 
         assertEquals(emptyList(), result.stats.resolution.analysisErrors)
-        assertEquals(null, edge(result.graph, "com.example.Use", "com.example.I", EdgeKind.FUNCTION_CALL))
+        assertNotNull(edge(result.graph, "com.example.Use", "com.example.I", EdgeKind.FUNCTION_CALL))
         assertEquals(null, edge(result.graph, "com.example.Use", "com.example.Impl", EdgeKind.FUNCTION_CALL))
     }
 }
