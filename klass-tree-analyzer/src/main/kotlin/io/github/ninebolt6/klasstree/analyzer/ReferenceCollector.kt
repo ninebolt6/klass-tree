@@ -103,6 +103,12 @@ internal data class JavaInheritanceCandidate(
     override val kind: EdgeKind get() = EdgeKind.INHERITANCE
 }
 
+// A `permits` entry on a sealed class declares the *subclass's* inheritance, so
+// unlike other references the edge is recorded subclass -> sealed parent.
+internal data class JavaPermitsCandidate(
+    override val element: PsiJavaCodeReferenceElement,
+) : JavaCandidate
+
 internal data class JavaAnnotationCandidate(
     override val element: PsiAnnotation,
 ) : JavaCandidate

@@ -31,6 +31,10 @@ internal class JavaCandidateResolver(
                 resolveTypeRef(candidate)
             }
 
+            is JavaPermitsCandidate -> {
+                resolvePermits(candidate)
+            }
+
             is JavaAnnotationCandidate -> {
                 handleResolved(
                     candidate.element.resolveAnnotationType(),
@@ -74,6 +78,33 @@ internal class JavaCandidateResolver(
             else -> {
                 stats.skipped++
             }
+        }
+    }
+
+    // A `permits` clause on a sealed class declares that the permitted class
+    // inherits it, so the INHERITANCE edge points subclass -> sealed parent,
+    // the same direction as the child's own `extends`/`implements` clause.
+    private fun resolvePermits(candidate: JavaPermitsCandidate) {
+        val element = candidate.element
+        val resolved = element.resolve()
+        val subclass = resolved as? PsiClass
+        if (subclass == null) {
+            if (resolved == null) stats.unresolved++ else stats.skipped++
+            return
+        }
+        val from = subclass.qualifiedName?.let(index::nodeForQualifiedName)
+        val to = index.nodeForElement(element)
+        val callSite = index.callSite(element)
+        if (from == null) {
+            stats.resolvedExternal++
+        } else if (to == null || callSite == null) {
+            stats.skipped++
+        } else if (from.id == to.id) {
+            stats.resolvedSource++
+            stats.selfEdgesSkipped++
+        } else {
+            stats.resolvedSource++
+            index.addEdge(from, to, EdgeKind.INHERITANCE, callSite)
         }
     }
 
