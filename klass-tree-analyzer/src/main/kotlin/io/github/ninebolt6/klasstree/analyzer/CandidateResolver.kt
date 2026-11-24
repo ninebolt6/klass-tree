@@ -12,6 +12,7 @@ import org.jetbrains.kotlin.analysis.api.resolution.resolveSuccessfulSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaCallableSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaClassLikeSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaConstructorSymbol
+import org.jetbrains.kotlin.analysis.api.symbols.KaEnumEntrySymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaJavaFieldSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaNamedFunctionSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaPackageSymbol
@@ -24,6 +25,7 @@ import org.jetbrains.kotlin.analysis.api.symbols.KaTypeParameterSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.allOverriddenSymbols
 import org.jetbrains.kotlin.analysis.api.symbols.directlyOverriddenSymbols
 import org.jetbrains.kotlin.analysis.api.symbols.fakeOverrideOriginal
+import org.jetbrains.kotlin.psi.KtClass
 import org.jetbrains.kotlin.resolution.KtResolvable
 import org.jetbrains.kotlin.resolution.KtResolvableCall
 
@@ -98,6 +100,14 @@ internal class CandidateResolver(
             }
 
             is KaJavaFieldSymbol -> {
+                handleSymbol(
+                    symbol,
+                    candidate.element,
+                    EdgeKind.PROPERTY_ACCESS,
+                )
+            }
+
+            is KaEnumEntrySymbol -> {
                 handleSymbol(
                     symbol,
                     candidate.element,
@@ -207,7 +217,9 @@ internal class CandidateResolver(
             }
 
             KaSymbolOrigin.SOURCE_MEMBER_GENERATED -> {
-                if (symbol is KaConstructorSymbol) {
+                // Generated enum members (valueOf, values, entries) are real API surfaces of the
+                // enum; other generated members (data class copy/componentN, …) are not.
+                if (symbol is KaConstructorSymbol || (symbol.psi as? KtClass)?.isEnum() == true) {
                     SymbolDisposition.RECORD
                 } else {
                     SymbolDisposition.SKIPPED
