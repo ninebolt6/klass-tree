@@ -406,6 +406,27 @@ class AnalyzerJavaTest {
     }
 
     @Test
+    fun `java edges route to the caller module's own duplicate kotlin class`() {
+        val result =
+            analyze(
+                module(":app:main", "a/Dup.kt" to "package a\nclass Dup"),
+                module(
+                    ":lib:main",
+                    "a/Dup.kt" to "package a\nclass Dup",
+                    "a/Use.java" to "package a; public class Use { Dup d = new Dup(); }",
+                ),
+            )
+        val use = result.graph.nodes.single { it.module == "lib" && it.fqName == "a.Use" }
+        val libDup = result.graph.nodes.single { it.module == "lib" && it.fqName == "a.Dup" }
+        assertNotNull(
+            result.graph.edges.singleOrNull {
+                it.from == use.id && it.to == libDup.id && it.kind == EdgeKind.CONSTRUCTOR_CALL
+            },
+            "Use in :lib must construct lib's own a.Dup, got " + result.graph.edges,
+        )
+    }
+
+    @Test
     fun `javadoc references do not produce edges`() {
         val result =
             analyze(
