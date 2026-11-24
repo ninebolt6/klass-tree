@@ -29,7 +29,9 @@ import org.jetbrains.kotlin.analysis.api.symbols.allOverriddenSymbols
 import org.jetbrains.kotlin.analysis.api.symbols.directlyOverriddenSymbols
 import org.jetbrains.kotlin.analysis.api.symbols.fakeOverrideOriginal
 import org.jetbrains.kotlin.psi.KtBinaryExpression
+import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtClass
+import org.jetbrains.kotlin.psi.KtNameReferenceExpression
 import org.jetbrains.kotlin.psi.KtUnaryExpression
 import org.jetbrains.kotlin.resolution.KtResolvable
 import org.jetbrains.kotlin.resolution.KtResolvableCall
@@ -77,6 +79,12 @@ internal class CandidateResolver(
                 else -> null
             }
         }
+        // `x.f()` where `f` is a function-typed property resolves to the library
+        // `FunctionN.invoke` (or fails to resolve at all for receiver-typed properties), and the
+        // callee name is never collected as a property, so it needs its own edge.
+        val callee = (element as? KtCallExpression)?.calleeExpression as? KtNameReferenceExpression
+        val property = callee?.resolveSuccessfulSymbol() as? KaPropertySymbol
+        if (property != null) handleSymbol(property, callee, EdgeKind.PROPERTY_ACCESS)
     }
 
     context(session: KaSession)
