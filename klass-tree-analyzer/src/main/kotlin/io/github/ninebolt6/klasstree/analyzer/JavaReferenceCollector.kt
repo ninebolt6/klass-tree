@@ -61,6 +61,10 @@ internal object JavaReferenceCollector {
         if (isNonSourceReference(reference)) return null
         val parent = reference.parent
         return when {
+            parent is PsiReferenceList && parent.role == PsiReferenceList.Role.PERMITS_LIST -> {
+                JavaPermitsCandidate(reference)
+            }
+
             isInheritanceReference(parent) -> {
                 JavaInheritanceCandidate(reference)
             }
