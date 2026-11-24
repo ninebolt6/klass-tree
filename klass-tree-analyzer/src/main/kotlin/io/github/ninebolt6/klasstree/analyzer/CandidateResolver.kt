@@ -25,6 +25,7 @@ import org.jetbrains.kotlin.analysis.api.symbols.allOverriddenSymbols
 import org.jetbrains.kotlin.analysis.api.symbols.directlyOverriddenSymbols
 import org.jetbrains.kotlin.analysis.api.symbols.fakeOverrideOriginal
 import org.jetbrains.kotlin.resolution.KtResolvable
+import org.jetbrains.kotlin.resolution.KtResolvableCall
 
 @OptIn(KaExperimentalApi::class)
 internal class CandidateResolver(
@@ -39,7 +40,8 @@ internal class CandidateResolver(
         stats.candidates++
         when (candidate) {
             is KotlinSymbolCandidate -> resolveSymbolCandidate(candidate)
-            is CallCandidate -> resolveCallCandidate(candidate)
+            is CallCandidate -> resolveCallCandidate(candidate.element)
+            is ConstructorCallCandidate -> resolveCallCandidate(candidate.element)
             is AnnotationCandidate -> resolveAnnotationCandidate(candidate)
             is PropertyCandidate -> resolvePropertyCandidate(candidate)
             is CallableReferenceCandidate -> resolveCallableReferenceCandidate(candidate)
@@ -58,8 +60,8 @@ internal class CandidateResolver(
     }
 
     context(session: KaSession)
-    private fun resolveCallCandidate(candidate: CallCandidate) {
-        handleCalls(candidate.element.resolveSuccessfulCall(), candidate.element) { symbol ->
+    private fun resolveCallCandidate(element: KtResolvableCall) {
+        handleCalls(element.resolveSuccessfulCall(), element) { symbol ->
             when (symbol) {
                 is KaConstructorSymbol -> EdgeKind.CONSTRUCTOR_CALL
                 is KaSamConstructorSymbol -> EdgeKind.CONSTRUCTOR_CALL
