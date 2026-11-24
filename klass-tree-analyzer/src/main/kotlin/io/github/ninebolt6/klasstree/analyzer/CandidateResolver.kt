@@ -14,6 +14,7 @@ import org.jetbrains.kotlin.analysis.api.resolution.resolveSuccessfulSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaCallableSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaClassLikeSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaConstructorSymbol
+import org.jetbrains.kotlin.analysis.api.symbols.KaEnumEntrySymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaJavaFieldSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaNamedFunctionSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaPackageSymbol
@@ -28,6 +29,7 @@ import org.jetbrains.kotlin.analysis.api.symbols.allOverriddenSymbols
 import org.jetbrains.kotlin.analysis.api.symbols.directlyOverriddenSymbols
 import org.jetbrains.kotlin.analysis.api.symbols.fakeOverrideOriginal
 import org.jetbrains.kotlin.psi.KtBinaryExpression
+import org.jetbrains.kotlin.psi.KtClass
 import org.jetbrains.kotlin.psi.KtUnaryExpression
 import org.jetbrains.kotlin.resolution.KtResolvable
 import org.jetbrains.kotlin.resolution.KtResolvableCall
@@ -45,7 +47,8 @@ internal class CandidateResolver(
         stats.candidates++
         when (candidate) {
             is KotlinSymbolCandidate -> resolveSymbolCandidate(candidate)
-            is CallCandidate -> resolveCallCandidate(candidate)
+            is CallCandidate -> resolveCallCandidate(candidate.element)
+            is ConstructorCallCandidate -> resolveCallCandidate(candidate.element)
             is AnnotationCandidate -> resolveAnnotationCandidate(candidate)
             is PropertyCandidate -> resolvePropertyCandidate(candidate)
             is CallableReferenceCandidate -> resolveCallableReferenceCandidate(candidate)
@@ -64,8 +67,8 @@ internal class CandidateResolver(
     }
 
     context(session: KaSession)
-    private fun resolveCallCandidate(candidate: CallCandidate) {
-        handleCalls(candidate.element.resolveSuccessfulCall(), candidate.element) { symbol ->
+    private fun resolveCallCandidate(element: KtResolvableCall) {
+        handleCalls(element.resolveSuccessfulCall(), element) { symbol ->
             when (symbol) {
                 is KaConstructorSymbol -> EdgeKind.CONSTRUCTOR_CALL
                 is KaSamConstructorSymbol -> EdgeKind.CONSTRUCTOR_CALL
@@ -108,6 +111,14 @@ internal class CandidateResolver(
             }
 
             is KaJavaFieldSymbol -> {
+                handleSymbol(
+                    symbol,
+                    candidate.element,
+                    EdgeKind.PROPERTY_ACCESS,
+                )
+            }
+
+            is KaEnumEntrySymbol -> {
                 handleSymbol(
                     symbol,
                     candidate.element,
@@ -182,7 +193,8 @@ internal class CandidateResolver(
             handleSymbol(symbol.javaGetterSymbol, element, kind)
             return
         }
-        val originalSymbol = symbol.unwrapSubstitutionOverrides()
+        val aliasTarget = with(session) { (symbol as? KaConstructorSymbol)?.originalConstructorIfTypeAliased } ?: symbol
+        val originalSymbol = aliasTarget.unwrapSubstitutionOverrides()
         when (dispositionOf(originalSymbol)) {
             SymbolDisposition.SKIPPED -> {
                 stats.skipped++
@@ -221,7 +233,9 @@ internal class CandidateResolver(
             }
 
             KaSymbolOrigin.SOURCE_MEMBER_GENERATED -> {
-                if (symbol is KaConstructorSymbol) {
+                // Generated enum members (valueOf, values, entries) are real API surfaces of the
+                // enum; other generated members (data class copy/componentN, …) are not.
+                if (symbol is KaConstructorSymbol || (symbol.psi as? KtClass)?.isEnum() == true) {
                     SymbolDisposition.RECORD
                 } else {
                     SymbolDisposition.SKIPPED
