@@ -104,7 +104,7 @@ class AnalyzerImplicitInvokeTest {
                 package com.example;
 
                 public class JHolder {
-                    public kotlin.jvm.functions.Function0<kotlin.Unit> cb = () -> {};
+                    public kotlin.jvm.functions.Function0<kotlin.Unit> cb = () -> kotlin.Unit.INSTANCE;
                 }
                 """,
                     "Uses.kt" to """
