@@ -16,6 +16,123 @@ import kotlin.test.assertTrue
 
 class AnalyzerInteropTest {
     @Test
+    fun `generic inherited synthetic java properties target the declaring base`() {
+        val result =
+            analyze(
+                module(
+                    ":app:main",
+                    "Base.java" to """
+                    package com.example;
+                    public class Base<T> {
+                        public T getName() { return null; }
+                        public void setName(T name) {}
+                    }
+                """,
+                    "Child.java" to """
+                    package com.example;
+                    public class Child extends Base<String> {}
+                """,
+                    "Read.kt" to "package com.example.read\nfun read(b: com.example.Child): String = b.name",
+                    "Write.kt" to "package com.example.write\nfun write(b: com.example.Child) { b.name = \"x\" }",
+                ),
+            )
+        val targets =
+            listOf("read", "write").associateWith { operation ->
+                val from = result.graph.nodes.single { it.fqName == "com.example.$operation" }
+                result.graph.edges
+                    .filter { it.from == from.id && it.kind == EdgeKind.PROPERTY_ACCESS }
+                    .map { edge ->
+                        result.graph.nodes
+                            .single { it.id == edge.to }
+                            .fqName
+                    }.toSet()
+            }
+        assertEquals(
+            mapOf(
+                "read" to setOf("com.example.Base"),
+                "write" to setOf("com.example.Base"),
+            ),
+            targets,
+        )
+        assertEquals(0, result.stats.resolution.unresolved)
+    }
+
+    @Test
+    fun `synthetic java property accesses target the invoked accessors`() {
+        val result =
+            analyze(
+                module(
+                    ":app:main",
+                    "Base.java" to """
+                    package com.example;
+                    public class Base {
+                        public String getName() { return ""; }
+                        public void setName(String name) {}
+                    }
+                """,
+                    "Child.java" to """
+                    package com.example;
+                    public class Child extends Base {
+                        @Override public String getName() { return "child"; }
+                    }
+                """,
+                    "Read.kt" to "package com.example.read\nfun read(b: com.example.Child) = b.name",
+                    "Write.kt" to "package com.example.write\nfun write(b: com.example.Child) { b.name = \"x\" }",
+                    "Compound.kt" to """
+                    package com.example.compound
+                    fun append(b: com.example.Child) { b.name += "x" }
+                """,
+                ),
+            )
+        val targets =
+            listOf("read", "write", "compound").associateWith { operation ->
+                val from = result.graph.nodes.single { it.fqName == "com.example.$operation" }
+                result.graph.edges
+                    .filter { it.from == from.id && it.kind == EdgeKind.PROPERTY_ACCESS }
+                    .map { edge ->
+                        result.graph.nodes
+                            .single { it.id == edge.to }
+                            .fqName
+                    }.toSet()
+            }
+        assertEquals(
+            mapOf(
+                "read" to setOf("com.example.Child"),
+                "write" to setOf("com.example.Base"),
+                "compound" to setOf("com.example.Child", "com.example.Base"),
+            ),
+            targets,
+        )
+        assertEquals(0, result.stats.resolution.unresolved)
+    }
+
+    @Test
+    fun `kotlin reads java getters as synthetic properties`() {
+        val result =
+            analyze(
+                module(
+                    ":app:main",
+                    "Bean.java" to """
+                    package com.example;
+                    public class Bean {
+                        public String getName() { return ""; }
+                    }
+                """,
+                    "Use.kt" to """
+                    package com.example
+
+                    fun use(b: Bean): String = b.name
+                """,
+                ),
+            )
+        assertNotNull(
+            edge(result.graph, "com.example", "com.example.Bean", EdgeKind.PROPERTY_ACCESS),
+            "Kotlin synthetic property reads must reach the Java getter's class",
+        )
+        assertEquals(0, result.stats.resolution.unresolved)
+    }
+
+    @Test
     fun `java resolves project members through library return types`() {
         val result =
             analyze(

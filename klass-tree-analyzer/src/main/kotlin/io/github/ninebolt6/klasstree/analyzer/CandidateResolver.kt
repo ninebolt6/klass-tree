@@ -5,7 +5,9 @@ import io.github.ninebolt6.klasstree.graph.EdgeKind
 import io.github.ninebolt6.klasstree.graph.GraphNode
 import org.jetbrains.kotlin.analysis.api.KaExperimentalApi
 import org.jetbrains.kotlin.analysis.api.KaSession
+import org.jetbrains.kotlin.analysis.api.resolution.KaCompoundVariableAccessCall
 import org.jetbrains.kotlin.analysis.api.resolution.KaSimpleOrMultiCall
+import org.jetbrains.kotlin.analysis.api.resolution.KaVariableAccessCall
 import org.jetbrains.kotlin.analysis.api.resolution.calls
 import org.jetbrains.kotlin.analysis.api.resolution.resolveSuccessfulCall
 import org.jetbrains.kotlin.analysis.api.resolution.resolveSuccessfulSymbol
@@ -21,11 +23,14 @@ import org.jetbrains.kotlin.analysis.api.symbols.KaSamConstructorSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaSymbolLocation
 import org.jetbrains.kotlin.analysis.api.symbols.KaSymbolOrigin
+import org.jetbrains.kotlin.analysis.api.symbols.KaSyntheticJavaPropertySymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaTypeParameterSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.allOverriddenSymbols
 import org.jetbrains.kotlin.analysis.api.symbols.directlyOverriddenSymbols
 import org.jetbrains.kotlin.analysis.api.symbols.fakeOverrideOriginal
+import org.jetbrains.kotlin.psi.KtBinaryExpression
 import org.jetbrains.kotlin.psi.KtClass
+import org.jetbrains.kotlin.psi.KtUnaryExpression
 import org.jetbrains.kotlin.resolution.KtResolvable
 import org.jetbrains.kotlin.resolution.KtResolvableCall
 
@@ -91,6 +96,12 @@ internal class CandidateResolver(
             return
         }
         when (val symbol = resolvable.resolveSuccessfulSymbol()) {
+            is KaSyntheticJavaPropertySymbol -> {
+                val accessors = syntheticPropertyAccessors(symbol, candidate.element)
+                if (accessors.isEmpty()) stats.unresolved++
+                accessors.forEach { handleSymbol(it, candidate.element, EdgeKind.PROPERTY_ACCESS) }
+            }
+
             is KaPropertySymbol -> {
                 handleSymbol(
                     symbol,
@@ -178,6 +189,10 @@ internal class CandidateResolver(
             stats.unresolved++
             return
         }
+        if (symbol is KaSyntheticJavaPropertySymbol) {
+            handleSymbol(symbol.javaGetterSymbol, element, kind)
+            return
+        }
         val aliasTarget = with(session) { (symbol as? KaConstructorSymbol)?.originalConstructorIfTypeAliased } ?: symbol
         val originalSymbol = aliasTarget.unwrapSubstitutionOverrides()
         when (dispositionOf(originalSymbol)) {
@@ -237,6 +252,45 @@ internal class CandidateResolver(
         }
 
     private enum class SymbolDisposition { RECORD, SKIPPED, EXTERNAL }
+}
+
+@OptIn(KaExperimentalApi::class)
+context(session: KaSession)
+private fun syntheticPropertyAccessors(
+    symbol: KaSyntheticJavaPropertySymbol,
+    element: PsiElement,
+): List<KaNamedFunctionSymbol> {
+    val call = compoundAccessCall(element) ?: (element as? KtResolvableCall)?.resolveSuccessfulCall()
+    return when (call) {
+        is KaCompoundVariableAccessCall -> {
+            listOfNotNull(symbol.javaGetterSymbol, symbol.javaSetterSymbol)
+        }
+
+        is KaVariableAccessCall -> {
+            if (call.kind is KaVariableAccessCall.Kind.Write) {
+                listOfNotNull(symbol.javaSetterSymbol)
+            } else {
+                listOf(symbol.javaGetterSymbol)
+            }
+        }
+
+        else -> {
+            emptyList()
+        }
+    }
+}
+
+@OptIn(KaExperimentalApi::class)
+context(session: KaSession)
+private fun compoundAccessCall(element: PsiElement): KaCompoundVariableAccessCall? {
+    val parent = element.parent
+    val operation =
+        when {
+            parent is KtBinaryExpression && parent.left === element -> parent
+            parent is KtUnaryExpression && parent.baseExpression === element -> parent
+            else -> null
+        }
+    return operation?.resolveSuccessfulCall() as? KaCompoundVariableAccessCall
 }
 
 @OptIn(KaExperimentalApi::class)
