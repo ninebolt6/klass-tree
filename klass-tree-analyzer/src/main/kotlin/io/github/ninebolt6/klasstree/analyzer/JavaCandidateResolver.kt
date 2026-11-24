@@ -12,6 +12,7 @@ import com.intellij.psi.PsiReferenceExpression
 import com.intellij.psi.PsiVariable
 import com.intellij.psi.util.PsiTreeUtil
 import io.github.ninebolt6.klasstree.graph.EdgeKind
+import org.jetbrains.kotlin.asJava.classes.KtLightClass
 import org.jetbrains.kotlin.asJava.classes.KtLightClassForFacade
 import org.jetbrains.kotlin.asJava.elements.KtLightMember
 
@@ -220,7 +221,10 @@ internal class JavaCandidateResolver(
             if (psiClass == null) stats.unresolved++ else stats.skipped++
             return
         }
-        val to = index.nodeForQualifiedName(fqName)
+        // The resolved PSI is already module-scoped by ModuleResolveScopeManager, so look up its
+        // declaration directly; a fqName lookup could pick the same-named class of another module.
+        val declaration = (psiClass as? KtLightClass)?.kotlinOrigin ?: psiClass
+        val to = index.nodeForElement(declaration) ?: index.nodeForQualifiedName(fqName)
         if (to == null) {
             stats.resolvedExternal++
         } else {
