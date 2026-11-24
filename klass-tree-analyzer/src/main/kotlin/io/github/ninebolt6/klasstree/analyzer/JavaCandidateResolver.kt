@@ -92,7 +92,11 @@ internal class JavaCandidateResolver(
             if (resolved == null) stats.unresolved++ else stats.skipped++
             return
         }
-        val from = subclass.qualifiedName?.let(index::nodeForQualifiedName)
+        // Prefer the resolved declaration's own node over the fqName index, so a
+        // duplicate fqName in another module does not steal the edge.
+        val from =
+            index.nodeForElement(subclass)
+                ?: subclass.qualifiedName?.let(index::nodeForQualifiedName)
         val to = index.nodeForElement(element)
         val callSite = index.callSite(element)
         if (from == null) {
