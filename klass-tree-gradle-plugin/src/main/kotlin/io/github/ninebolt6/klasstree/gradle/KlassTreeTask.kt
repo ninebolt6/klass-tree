@@ -63,6 +63,9 @@ abstract class KlassTreeTask : DefaultTask() {
     @get:Classpath
     abstract val analyzerClasspath: ConfigurableFileCollection
 
+    @get:Classpath
+    abstract val moduleClasspath: ConfigurableFileCollection
+
     @get:InputFiles
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val sourceFiles: ConfigurableFileCollection

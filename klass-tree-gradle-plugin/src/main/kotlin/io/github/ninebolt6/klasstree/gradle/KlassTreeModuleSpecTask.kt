@@ -33,6 +33,9 @@ abstract class KlassTreeModuleSpecTask : DefaultTask() {
     abstract val projectDependencyPaths: ListProperty<String>
 
     @get:Input
+    abstract val sourceProjectPaths: ListProperty<String>
+
+    @get:Input
     abstract val associatedModuleIds: ListProperty<String>
 
     @get:InputFiles

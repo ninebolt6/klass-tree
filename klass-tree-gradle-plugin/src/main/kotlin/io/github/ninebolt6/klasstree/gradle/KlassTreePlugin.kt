@@ -187,12 +187,21 @@ class KlassTreePlugin : Plugin<Project> {
         }
 
         val sourceDirectories = projectScans.values.flatMap { it.sourceDirectories }
+        val sourceProjectPaths =
+            projectScans
+                .filterValues { scan ->
+                    scan.moduleTasks.any { it.get().sourceSetName.get() == "main" }
+                }.keys
+                .toList()
+        val moduleTasks = projectScans.values.flatMap { it.moduleTasks }
         val moduleSpecOutputs =
-            projectScans.values
-                .flatMap { it.moduleTasks }
-                .map { moduleTask -> moduleTask.flatMap(KlassTreeModuleSpecTask::outputFile) }
+            moduleTasks.map { moduleTask ->
+                moduleTask.configure { it.sourceProjectPaths.set(sourceProjectPaths) }
+                moduleTask.flatMap(KlassTreeModuleSpecTask::outputFile)
+            }
         task.configure { klassTreeTask ->
             klassTreeTask.moduleSpecFiles.from(moduleSpecOutputs)
+            klassTreeTask.moduleClasspath.from(moduleTasks.map { it.map(KlassTreeModuleSpecTask::classpath) })
             klassTreeTask.sourceFiles.from(sourceDirectories)
             klassTreeTask.formats.set(formats)
         }
