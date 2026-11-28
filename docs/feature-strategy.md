@@ -108,7 +108,7 @@ ArchUnitはbytecode前提、module graph系は宣言レベルに届かず、Kons
 | --- | --- | --- | --- |
 | P1 | architecture rules v1 | 現在のdeny prefixは有用だが、実運用にはlayer/allowlist/例外が必要。 | package/module/layer matcher、allowed dependency、denied dependency、edge kind条件、`because`メッセージ。 |
 | P1 | approved exceptions | すべての例外をbaselineに混ぜると意図が失われる。 | 有効期限、owner、reason、対象edge kindを持つexception file。 |
-| P1 | SARIF/JUnit出力 | GitHub/GitLabのcode quality UIに乗せられ、CIでの見え方が大きく変わる。 | まずSARIFを優先。callSitesをlocationに写す。 |
+| P1 | SARIF/JUnit出力 | GitHub/GitLabのcode quality UIに乗せられ、CIでの見え方が大きく変わる。 | まずSARIFを優先。violation edge単位のresultに現行graphのcallSitesをrelated locationsとして出し、「新規箇所だけ」と誤解されない表現にする。現行baselineは件数だけを保持するため、新規箇所の特定が必要なら別途schema拡張かfull graph diffを設計する。 |
 | P1 | PR diff summary | 追加/削除依存、増減したcall-site count、新規cycleをレビュー単位で説明する。 | machine-readable diffを先に安定させ、PR commentは薄いadapterにする。 |
 | P2 | trend metrics | 改善活動を継続するには時系列が必要。 | dependency count、cycle count、tangle率、denied call-site countをJSON/CSVで出す。DBやSaaSにはしない。 |
 
