@@ -215,7 +215,7 @@ internal object ReferenceCollector {
         return result
     }
 
-    private val NON_CALLABLE_OPERATORS = setOf("is", "!is", "as", "as?", "&&", "||", "?:", "!!")
+    private val NON_CALLABLE_OPERATORS = setOf("is", "!is", "as", "as?", "&&", "||", "?:", "!!", "===", "!==")
 
     private fun shouldCollectType(type: KtUserType): Boolean =
         when {
