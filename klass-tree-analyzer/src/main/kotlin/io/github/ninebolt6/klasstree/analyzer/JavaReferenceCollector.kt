@@ -24,7 +24,11 @@ internal object JavaReferenceCollector {
         file.accept(
             object : JavaRecursiveElementVisitor() {
                 override fun visitNewExpression(expression: PsiNewExpression) {
-                    result += JavaCallCandidate(expression)
+                    if (expression.arrayDimensions.isEmpty() && expression.arrayInitializer == null) {
+                        result += JavaCallCandidate(expression)
+                    } else {
+                        expression.classReference?.let { result += JavaTypeCandidate(it) }
+                    }
                     super.visitNewExpression(expression)
                 }
 

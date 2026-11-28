@@ -73,7 +73,7 @@ internal class JavaCandidateResolver(
             }
 
             null -> {
-                stats.unresolved++
+                stats.recordUnresolved(candidate.kind, candidate.element, index)
             }
 
             else -> {
@@ -90,7 +90,11 @@ internal class JavaCandidateResolver(
         val resolved = element.resolve()
         val subclass = resolved as? PsiClass
         if (subclass == null) {
-            if (resolved == null) stats.unresolved++ else stats.skipped++
+            if (resolved == null) {
+                stats.recordUnresolved(EdgeKind.INHERITANCE, candidate.element, index)
+            } else {
+                stats.skipped++
+            }
             return
         }
         // Prefer the resolved declaration's own node over the fqName index, so a
@@ -140,7 +144,7 @@ internal class JavaCandidateResolver(
     private fun resolveMethodRef(candidate: JavaMethodRefCandidate) {
         val method = candidate.element.resolve() as? PsiMethod
         if (method == null) {
-            stats.unresolved++
+            stats.recordUnresolved(EdgeKind.CALLABLE_REFERENCE, candidate.element, index)
         } else {
             handleResolved(
                 method,
@@ -163,7 +167,7 @@ internal class JavaCandidateResolver(
         val ref = element.anonymousClass?.baseClassReference ?: element.classReference
         val resolved = ref?.resolve() as? PsiClass
         if (resolved == null) {
-            stats.unresolved++
+            stats.recordUnresolved(EdgeKind.CONSTRUCTOR_CALL, element, index)
         } else {
             handleResolved(
                 resolved,
@@ -193,7 +197,11 @@ internal class JavaCandidateResolver(
         // Java PSI may not resolve record accessors in standalone sessions.
         val target = method?.containingClass ?: qualifierReceiverClass(element)
         if (target == null) {
-            if (method == null) stats.unresolved++ else stats.skipped++
+            if (method == null) {
+                stats.recordUnresolved(EdgeKind.FUNCTION_CALL, element, index)
+            } else {
+                stats.skipped++
+            }
             return
         }
         val kind =
@@ -253,7 +261,11 @@ internal class JavaCandidateResolver(
         }
         val fqName = psiClass?.qualifiedName
         if (fqName == null) {
-            if (psiClass == null) stats.unresolved++ else stats.skipped++
+            if (psiClass == null) {
+                stats.recordUnresolved(kind, element, index)
+            } else {
+                stats.skipped++
+            }
             return
         }
         // The resolved PSI is already module-scoped by ModuleResolveScopeManager, so look up its

@@ -49,8 +49,8 @@ internal class CandidateResolver(
         stats.candidates++
         when (candidate) {
             is KotlinSymbolCandidate -> resolveSymbolCandidate(candidate)
-            is CallCandidate -> resolveCallCandidate(candidate.element)
-            is ConstructorCallCandidate -> resolveCallCandidate(candidate.element)
+            is CallCandidate -> resolveCallCandidate(candidate.element, EdgeKind.FUNCTION_CALL)
+            is ConstructorCallCandidate -> resolveCallCandidate(candidate.element, EdgeKind.CONSTRUCTOR_CALL)
             is AnnotationCandidate -> resolveAnnotationCandidate(candidate)
             is PropertyCandidate -> resolvePropertyCandidate(candidate)
             is CallableReferenceCandidate -> resolveCallableReferenceCandidate(candidate)
@@ -69,8 +69,11 @@ internal class CandidateResolver(
     }
 
     context(session: KaSession)
-    private fun resolveCallCandidate(element: KtResolvableCall) {
-        handleCalls(element.resolveSuccessfulCall(), element) { symbol ->
+    private fun resolveCallCandidate(
+        element: KtResolvableCall,
+        unresolvedKind: EdgeKind,
+    ) {
+        handleCalls(element.resolveSuccessfulCall(), element, unresolvedKind) { symbol ->
             when (symbol) {
                 is KaConstructorSymbol -> EdgeKind.CONSTRUCTOR_CALL
                 is KaSamConstructorSymbol -> EdgeKind.CONSTRUCTOR_CALL
@@ -108,7 +111,7 @@ internal class CandidateResolver(
         when (val symbol = resolvable.resolveSuccessfulSymbol()) {
             is KaSyntheticJavaPropertySymbol -> {
                 val accessors = syntheticPropertyAccessors(symbol, candidate.element)
-                if (accessors.isEmpty()) stats.unresolved++
+                if (accessors.isEmpty()) stats.recordUnresolved(EdgeKind.PROPERTY_ACCESS, candidate.element, index)
                 accessors.forEach { handleSymbol(it, candidate.element, EdgeKind.PROPERTY_ACCESS) }
             }
 
@@ -156,14 +159,18 @@ internal class CandidateResolver(
 
     context(session: KaSession)
     private fun resolveCallableReferenceCandidate(candidate: CallableReferenceCandidate) {
-        handleCalls(candidate.element.resolveSuccessfulCall(), candidate.element) {
+        handleCalls(candidate.element.resolveSuccessfulCall(), candidate.element, EdgeKind.CALLABLE_REFERENCE) {
             EdgeKind.CALLABLE_REFERENCE
         }
     }
 
     context(session: KaSession)
     private fun resolveOperatorCandidate(candidate: OperatorCandidate) {
-        handleCalls(candidate.element.resolveSuccessfulCall(), candidate.element) {
+        handleCalls(
+            candidate.element.resolveSuccessfulCall(),
+            candidate.element,
+            EdgeKind.OPERATOR_OR_SYNTHETIC_CALL,
+        ) {
             EdgeKind.OPERATOR_OR_SYNTHETIC_CALL
         }
     }
@@ -172,10 +179,11 @@ internal class CandidateResolver(
     private fun handleCalls(
         call: KaSimpleOrMultiCall?,
         element: PsiElement,
+        unresolvedKind: EdgeKind,
         kindFor: (KaSymbol) -> EdgeKind?,
     ) {
         if (call == null) {
-            stats.unresolved++
+            stats.recordUnresolved(unresolvedKind, element, index)
             return
         }
         for (simpleCall in call.calls) {
@@ -196,7 +204,7 @@ internal class CandidateResolver(
         kind: EdgeKind,
     ) {
         if (symbol == null) {
-            stats.unresolved++
+            stats.recordUnresolved(kind, element, index)
             return
         }
         if (symbol is KaSyntheticJavaPropertySymbol) {

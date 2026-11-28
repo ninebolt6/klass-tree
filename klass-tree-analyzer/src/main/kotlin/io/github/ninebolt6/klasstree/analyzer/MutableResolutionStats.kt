@@ -1,5 +1,8 @@
 package io.github.ninebolt6.klasstree.analyzer
 
+import com.intellij.psi.PsiElement
+import io.github.ninebolt6.klasstree.graph.EdgeKind
+
 internal class MutableResolutionStats {
     var candidates: Int = 0
     var resolvedSource: Int = 0
@@ -8,6 +11,31 @@ internal class MutableResolutionStats {
     var skipped: Int = 0
     var selfEdgesSkipped: Int = 0
     val analysisErrors = mutableListOf<String>()
+    private val unresolvedByKind = sortedMapOf<String, Int>()
+    private val unresolvedSamples = mutableListOf<UnresolvedReferenceSample>()
+
+    fun recordUnresolved(
+        kind: EdgeKind,
+        element: PsiElement,
+        index: DeclarationIndex,
+    ) {
+        unresolved++
+        unresolvedByKind[kind.name] = (unresolvedByKind[kind.name] ?: 0) + 1
+        if (unresolvedSamples.size < MAX_UNRESOLVED_SAMPLES) {
+            val site = index.callSite(element)
+            unresolvedSamples +=
+                UnresolvedReferenceSample(
+                    kind = kind.name,
+                    file = site?.file,
+                    line = site?.line,
+                    column = site?.column,
+                    text =
+                        element.text
+                            .replace(Regex("\\s+"), " ")
+                            .takeValidCodePoints(MAX_SAMPLE_TEXT_LENGTH),
+                )
+        }
+    }
 
     fun toImmutable(): ResolutionStats =
         ResolutionStats(
@@ -18,5 +46,44 @@ internal class MutableResolutionStats {
             skipped = skipped,
             selfEdgesSkipped = selfEdgesSkipped,
             analysisErrors = analysisErrors.toList(),
+            unresolvedByKind = unresolvedByKind.toMap(),
+            unresolvedSamples = unresolvedSamples.toList(),
         )
+
+    private companion object {
+        const val MAX_UNRESOLVED_SAMPLES = 200
+        const val MAX_SAMPLE_TEXT_LENGTH = 160
+    }
+}
+
+internal fun String.takeValidCodePoints(maxCodePoints: Int): String {
+    val result = StringBuilder()
+    var index = 0
+    var count = 0
+    while (index < length && count < maxCodePoints) {
+        val char = this[index]
+        when {
+            Character.isHighSurrogate(char) -> {
+                if (index + 1 < length && Character.isLowSurrogate(this[index + 1])) {
+                    result.append(char).append(this[index + 1])
+                    index += 2
+                } else {
+                    result.append('�')
+                    index++
+                }
+            }
+
+            Character.isLowSurrogate(char) -> {
+                result.append('�')
+                index++
+            }
+
+            else -> {
+                result.append(char)
+                index++
+            }
+        }
+        count++
+    }
+    return result.toString()
 }

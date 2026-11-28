@@ -92,6 +92,36 @@ class AnalyzerJavaTest {
     }
 
     @Test
+    fun `java array creation is not a constructor candidate`() {
+        val result =
+            analyze(
+                module(
+                    ":app:main",
+                    "Item.java" to "package com.example; public class Item {}",
+                    "Main.java" to """
+                    package com.example;
+                    public class Main {
+                        int[] values = new int[4];
+                        int[] initials = new int[] { 1 };
+                        Object items = new Item[4];
+                        Object initialItems = new Item[] { null };
+                    }
+                """,
+                ),
+            )
+
+        val typeEdge =
+            assertNotNull(edge(result.graph, "com.example.Main", "com.example.Item", EdgeKind.TYPE_REFERENCE))
+        assertEquals(setOf(5, 6), typeEdge.callSites.map { it.line }.toSet())
+        assertEquals(0, result.stats.resolution.unresolvedByKind[EdgeKind.CONSTRUCTOR_CALL.name] ?: 0)
+        assertTrue(
+            result.stats.resolution.unresolvedSamples.none {
+                it.text.contains("new int")
+            },
+        )
+    }
+
+    @Test
     fun `java throws static-import field and enum edges`() {
         val result =
             analyze(
