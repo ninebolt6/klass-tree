@@ -4,6 +4,7 @@ A Gradle plugin that writes a **source-level Kotlin dependency graph** for Kotli
 It resolves references semantically with the Kotlin Analysis API (Standalone) and produces:
 
 - `graph.json` — the primary, platform-independent artifact;
+- `analysis-summary.json` — resolution counts, unresolved-reference breakdowns, and diagnostic samples;
 - `graph.dot` — an optional Graphviz rendering derived from the JSON output.
 
 Only declarations in the analyzed source sets become nodes. References to JDK and library classes
@@ -204,6 +205,8 @@ analyzer's run summary instead.
 - Nullable fields are omitted.
 - Files or references that could not be analyzed are reported in the analyzer output; the build
   fails only when `failOnAnalysisError` is enabled.
+- `analysis-summary.json` contains aggregate resolution counts, `unresolvedByKind`, and up to 200
+  unresolved reference and analysis error samples for corpus measurement and regression triage.
 
 ## Architecture
 

@@ -24,4 +24,14 @@ data class ResolutionStats(
     val skipped: Int = 0,
     val selfEdgesSkipped: Int = 0,
     val analysisErrors: List<String> = emptyList(),
+    val unresolvedByKind: Map<String, Int> = emptyMap(),
+    val unresolvedSamples: List<UnresolvedReferenceSample> = emptyList(),
+)
+
+data class UnresolvedReferenceSample(
+    val kind: String,
+    val file: String?,
+    val line: Int?,
+    val column: Int?,
+    val text: String,
 )
