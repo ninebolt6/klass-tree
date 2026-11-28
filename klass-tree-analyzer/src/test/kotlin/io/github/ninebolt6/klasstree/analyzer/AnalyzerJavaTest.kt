@@ -103,14 +103,16 @@ class AnalyzerJavaTest {
                     public class Main {
                         int[] values = new int[4];
                         int[] initials = new int[] { 1 };
-                        Item[] items = new Item[4];
-                        Item[] initialItems = new Item[] { new Item() };
+                        Object items = new Item[4];
+                        Object initialItems = new Item[] { null };
                     }
                 """,
                 ),
             )
 
-        assertNotNull(edge(result.graph, "com.example.Main", "com.example.Item", EdgeKind.TYPE_REFERENCE))
+        val typeEdge =
+            assertNotNull(edge(result.graph, "com.example.Main", "com.example.Item", EdgeKind.TYPE_REFERENCE))
+        assertEquals(setOf(5, 6), typeEdge.callSites.map { it.line }.toSet())
         assertEquals(0, result.stats.resolution.unresolvedByKind[EdgeKind.CONSTRUCTOR_CALL.name] ?: 0)
         assertTrue(
             result.stats.resolution.unresolvedSamples.none {
