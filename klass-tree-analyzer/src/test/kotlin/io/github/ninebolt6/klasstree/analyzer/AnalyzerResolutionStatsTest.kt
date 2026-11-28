@@ -31,4 +31,12 @@ class AnalyzerResolutionStatsTest {
         assertEquals("src/app/main/Broken.kt", sample.file)
         assertEquals("MissingType", sample.text)
     }
+
+    @Test
+    fun `sample text truncation keeps surrogate pairs valid`() {
+        assertEquals("a🚀", "a🚀".takeValidCodePoints(2))
+        assertEquals("a", "a🚀".takeValidCodePoints(1))
+        assertEquals("�", "\uD800".takeValidCodePoints(1))
+        assertEquals("�", "\uDC00".takeValidCodePoints(1))
+    }
 }

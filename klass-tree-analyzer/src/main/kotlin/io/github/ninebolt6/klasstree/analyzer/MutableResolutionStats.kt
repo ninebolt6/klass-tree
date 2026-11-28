@@ -29,7 +29,10 @@ internal class MutableResolutionStats {
                     file = site?.file,
                     line = site?.line,
                     column = site?.column,
-                    text = element.text.replace(Regex("\\s+"), " ").take(MAX_SAMPLE_TEXT_LENGTH),
+                    text =
+                        element.text
+                            .replace(Regex("\\s+"), " ")
+                            .takeValidCodePoints(MAX_SAMPLE_TEXT_LENGTH),
                 )
         }
     }
@@ -51,4 +54,36 @@ internal class MutableResolutionStats {
         const val MAX_UNRESOLVED_SAMPLES = 200
         const val MAX_SAMPLE_TEXT_LENGTH = 160
     }
+}
+
+internal fun String.takeValidCodePoints(maxCodePoints: Int): String {
+    val result = StringBuilder()
+    var index = 0
+    var count = 0
+    while (index < length && count < maxCodePoints) {
+        val char = this[index]
+        when {
+            Character.isHighSurrogate(char) -> {
+                if (index + 1 < length && Character.isLowSurrogate(this[index + 1])) {
+                    result.append(char).append(this[index + 1])
+                    index += 2
+                } else {
+                    result.append('�')
+                    index++
+                }
+            }
+
+            Character.isLowSurrogate(char) -> {
+                result.append('�')
+                index++
+            }
+
+            else -> {
+                result.append(char)
+                index++
+            }
+        }
+        count++
+    }
+    return result.toString()
 }
