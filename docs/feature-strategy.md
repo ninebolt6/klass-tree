@@ -1,179 +1,213 @@
-# klass-tree 機能実装戦略: 市場ギャップからの逆算
+# klass-tree 機能実装戦略: 市場ギャップと検証すべき前提
 
 作成日: 2026-11-28  
 対象: Kotlin/JVM プロジェクト向けソースレベル依存グラフ
 
 ## 結論
 
-klass-tree は「汎用のモジュール依存グラフ」や「Kotlin linter」として競合するべきではない。価値の中心は、**Kotlin Analysis API で意味解決した宣言レベルの依存関係を、正確なコールサイト証拠付きで再利用可能なデータにすること**にある。
+klass-tree が狙うべき市場は、汎用のモジュールグラフでも、lintでも、CodeQLのような汎用クエリ基盤でもない。残っている隙間は、**Gradle内で完結し、Kotlinソースの意味解決に基づく依存関係を、段階的なアーキテクチャ改善ワークフローへ直接つなげる軽量な仕組み**である。
 
-市場には、モジュール単位の可視化、アーキテクチャルールのテスト、商用の総合アーキテクチャ管理はある。一方で、Kotlin固有の意味論を保ったまま、宣言・呼び出し・継承・アノテーションを横断し、CIで段階的に運用できるオープンな仕組みは少ない。klass-tree はこの隙間で「Kotlin semantic dependency intelligence」に特化すべきである。
+ただし、この差別化は現時点では仮説である。現在の実装には、精度未検証、compiler plugin/language settings未反映、node IDのリファクタリング耐性不足、member粒度不足、build cache非対応、Gradle Isolated Projectsと相性が悪いプラグイン構造という前提リスクがある。したがって、HTMLレポートやルール強化より先に、**精度corpus、schema identity/粒度、互換性matrix、Gradle実行モデル**を検証する。
 
-実装優先順位は次の通り。
+初期ターゲットは **Kotlin server-side / JVM backend** に絞る。Android/KMPは市場として大きいが、Composeなどのcompiler plugin、KSP/kapt生成コード、variant、expect/actualを扱う必要があり、現行の解析モデルのまま拡大しない。
 
-1. **配布と導入体験**: Gradle Plugin Portal / Maven Central への公開、バージョン付きリリース、最小セットアップ。
-2. **クエリ基盤と安定スキーマ**: `graph.json` を製品の中心に据え、依存元/依存先、影響範囲、経路、循環を再利用可能なライブラリとして提供する。
-3. **オフラインHTMLレポート**: 生JSONとDOTだけでは価値が届かないため、検索・フィルタ・ドリルダウン・コールサイト証拠を備える。
-4. **アーキテクチャガバナンスv1**: レイヤー/パッケージルール、循環検出、edge kind条件、例外承認を既存baseline ratchetと統合する。
-5. **CI連携**: SARIF/JUnit/XML差分レポートとPR annotationで、違反をレビュー可能な形にする。
-6. **スケール**: モジュール単位の増分解析、コンテンツ fingerprint、並列化、ベンチマーク。
-7. **Android/KMP**: JVMでの精度・性能・運用価値を証明した後に拡張する。KMPを早期の主力機能にしない。
+## 現行実装が置かれている前提
 
-## 市場観察
+戦略は現状の強みだけでなく、次の制約を前提に立てる。
 
-| ツール/カテゴリ | 強み | 残っているギャップ | klass-treeへの示唆 |
+### 精度はまだ証明されていない
+
+直近15コミットの多くは、delegation、SAM、typealias constructor、enum生成メンバ、Java getter、generic継承など解析漏れの修正である。これはKotlin semantic analysisの必要性を示す一方、「正確なグラフがある」という主張が実プロジェクトで検証済みであることは意味しない。
+
+必要なのは、自前fixtureだけでなく実OSSを対象にした精度corpusである。少なくとも次を測る。
+
+- unresolved reference率とanalysis error率
+- コンパイル済みbytecodeが持つ参照との差分
+- Kotlin↔Java相互参照のrecall
+- typealias、delegation、generated source、annotation use-site、operator/synthetic callの回帰
+- kotlinx.serialization、all-open/no-argなどcompiler pluginを使うfixtureでの挙動
+
+### source semanticとbytecodeは上下ではなくトレードオフ
+
+bytecode解析はKotlin固有構文を失いやすい一方、compilerが実際に生成したものを見る。source semantic解析は、元のKotlin構造と正確なソース位置を保持しやすい一方、compiler pluginが生成/変換する宣言をそのままでは見えない可能性がある。
+
+現行の`AnalysisSpec`はsource roots、classpath、module dependenciesだけを持ち、`AnalysisSession.kt`は`JvmPlatforms.defaultJvmPlatform`でmoduleを作る。language version、`-X`系フラグ、opt-in、compiler plugin設定は渡していない。Analysis API Standaloneのcompiler plugin対応自体も限られているため、これは実装漏れというだけでなく製品戦略上の中核リスクである。
+
+### baselineは「行移動」には強いが「移動/改名」には弱い
+
+baselineは`(from, to, kind)`をキーにcall-site countを比較する。現行node IDは`<module>:<relative-source-path>#<KIND>:<fq-name>`なので、ファイル移動、クラス改名、モジュール移動、source set変更で同一宣言でもIDが変わる。旧edgeはprogress、新edgeは`0 -> N`の増加になり、deny ruleに該当すれば純粋なリファクタリングで`klassTreeCheck`が失敗し得る。
+
+したがって現行の性質は「無関係な行移動では壊れにくい」までで、「リファクタリング耐性がある」ではない。schemaを公開固定する前に、logical identityとphysical locationを分ける必要がある。
+
+なお、単純なfqNameベースIDだけでも解決しない。`FILE_SCOPE`は本質的にファイルへ結び付き、同一fqNameが複数moduleに存在し得る。member-level identityを導入するか、file moveを表すalias/matchingを持つかを設計する必要がある。
+
+### 現在の「宣言レベル」は実質class/file-scopeレベル
+
+現行モデルではmemberはownerのclass/object/fileへ集約される。`CallSite`は`file/line/column`だけで、参照先のmember signatureを持たない。この粒度でもarchitecture driftの一部は見えるが、「どのmethodに依存しているか」「member単位のimpact」「最小カット」には不足する。
+
+schemaを固定する前に、少なくとも次を決める。
+
+- edgeまたはcallSiteにtarget member signatureを持たせるか
+- memberをnodeにするか、edge属性に留めるか
+- owner側のmemberも記録するか
+- overload、extension、constructor、typealias展開後の表現
+
+### Gradle実行モデルが公開後の bottleneck になる
+
+`KlassTreeTask`とmodule spec taskには`@CacheableTask`がない。up-to-date判定用のinput/outputはあるが、CIのclean checkoutやremote build cacheでは再利用できない。ただし、`projectRoot`のようなabsolute path inputや出力内のabsolute pathがあるため、annotationを付けるだけでキャッシュが効くとは限らない。relocatability auditとセットで扱う。
+
+また、プラグインはrootで`allprojects`、`afterEvaluate`、`projectsEvaluated`を使い、他projectの状態を読む。Gradle Isolated Projectsのcross-project access制約と相性が悪い。公開すると大規模利用者ほどここに当たるため、各projectがspec artifactを出し、rootがdependency経由で集約する構造を検討する。
+
+### composite buildは「ソース解析されない」が「classpathに乗らない」ではない
+
+現行プラグインがscanするのはroot buildの`allprojects`なので、included build内のprojectはsource moduleとして解析されない。一方、classpath artifact viewは別buildの`ProjectComponentIdentifier`を除外しないため、included buildのartifactはbinary dependencyとして残る設計である。したがって課題は「参照解決が全部できない」ではなく、「included build内の宣言がsource-level nodeにならずexternal扱いになる」ことである。
+
+## 市場観察: 差別化は狭いが存在する
+
+| ツール/カテゴリ | 強み | klass-treeとの重なり | 残る差別化の示唆 |
 | --- | --- | --- | --- |
-| [ArchUnit](https://www.archunit.org/userguide/html/000_Index.html) | Java bytecodeを対象にした成熟したアーキテクチャテスト。JUnit導線が強い。 | Java中心。Kotlin top-level functionは生成クラス経由になり扱いにくいことが[公開issue](https://github.com/TNG/ArchUnit/issues/528)でも議論されている。bytecode前提なのでKMP全般には広がりにくい。 | Kotlinの言語構造を第一級オブジェクトとして扱う。top-level declaration、typealias、operator、synthetic callを正確に残す。 |
-| [Konsist](https://docs.konsist.lemonappdev.com/writing-tests/architecture-assert) | Kotlinネイティブな宣言APIとKMP対応。テストとしてルールを書きやすい。 | プロダクトの中心は宣言検査/レイヤールールのテストAPIであり、意味解決済みの再利用可能な依存グラフやコールサイト単位の証跡が中心ではない。 | 「ルールを書ける」より先に「正確なグラフがある」ことを差別化する。Konsist的な宣言APIではなく、dependency intelligenceを提供する。 |
-| Gradle module graph系プラグイン（例: [vanniktech/gradle-dependency-graph-generator-plugin](https://github.com/vanniktech/gradle-dependency-graph-generator-plugin)） | セットアップが簡単で、モジュール構造の把握に向く。 | 主にbuildscript上のモジュール/外部依存関係で、ソース内のどの宣言が原因か分からない。 | モジュールグラフだけでは勝負しない。モジュール違反の原因となる宣言とコールサイトに降りられることを価値にする。 |
-| [Aalekh](https://github.com/shivathapaa/Aalekh) | モジュールアーキテクチャのHTMLレポート、ルール、baseline、メトリクス、SARIFなど運用機能が広い。KMP/Android対応を掲げる。 | 対象はGradle buildが見るモジュール構造であり、Kotlin宣言レベルの意味解決グラフではない。 | UX・レポート・CI出力は市場期待値を示している。klass-treeは同等の運用UXを、より深い宣言レベルの証拠に載せる必要がある。 |
-| [Sonargraph](https://www.hello2morrow.com/products/sonargraph/architect) | 商用の成熟した可視化、アーキテクチャDSL、メトリクス、baseline、cycle分析。Kotlin/JVM対応。 | 商用・総合ツールで導入が重い。公式ドキュメントはbytecode中心の解析によりinline関数ではインライン展開先の依存が見えない場合があると説明している（[Kotlin specific issues](https://eclipse.hello2morrow.com/doc/standalone/content/ch04s03s02.html)）。 | 商用級のガバナンス機能を、Kotlinソース意味論に強いオープンなGradleプラグインとして提供する余地がある。 |
-| 新興のsemantic graph系（例: [kartograph](https://github.com/ictechgy/kartograph), [ktrics](https://github.com/koji-1009/ktrics)） | コンパイル結果やAnalysis APIを使い、到達性・メトリクス・agent向けクエリに進んでいる。 | 市場がまだ若く、用途もdead code/metrics/reachabilityに分散している。bytecodeベースではKotlinソース上の正確な表現に限界が出やすい。 | 「agent/machine-readable」は将来標準になる。klass-treeもJSONスキーマとクエリAPIを一意な強みとして早期に固めるべき。 |
+| [CodeQL for Java/Kotlin](https://codeql.github.com/docs/codeql-language-guides/codeql-for-java/) | 意味解決済みcall graph、強力なquery言語、GitHub code scanning/SARIF導線。 | 「semantic + query + SARIF + CI」の大部分と重なる。 | klass-treeは汎用queryで勝たない。Gradle内完結、アーキテクチャratchet、軽量さ、修正ワークフローに絞る。 |
+| [dependency-analysis-gradle-plugin](https://github.com/autonomousapps/dependency-analysis-gradle-plugin/wiki/Tasks) | Android/JVMで導入実績があり、`reason`は依存adviceの原因クラスやshortest pathを示す。 | 「モジュール依存の原因に降りる」価値の一部。 | ABI/dependency adviceではなく、ソース参照種別とarchitecture driftの継続監視に絞る。 |
+| IntelliJ [Dependency Structure Matrix](https://www.jetbrains.com/help/idea/dsm-analysis.html) / Analyze Dependency | 多くの開発者が既に持ち、対話的な原因調査ができる。 | ローカルな依存調査と影響分析。 | klass-treeはCI、reviewable artifact、baseline、team rulesに価値を置く。IDE調査の代替にしない。 |
+| [ArchUnit](https://www.archunit.org/userguide/html/000_Index.html) / [Konsist](https://docs.konsist.lemonappdev.com/writing-tests/architecture-assert) | 成熟したrule/test導線。KonsistはKotlinネイティブでKMPも扱う。 | layer/rule enforcement。 | rule DSLを広く作り込まない。klass-treeはgraphとratchetを中核にし、最小限のruleだけを載せる。 |
+| Gradle module graph系 / [Aalekh](https://github.com/shivathapaa/Aalekh) / module-graph-assert | module構造のreport、rules、metrics、CI出力が手軽。AalekhはbaselineやSARIFも持つ。 | module architecture governance。 | module-onlyに深入りしない。klass-treeはmodule違反の原因となるsource referenceへ降りることを目指す。 |
+| [Sonargraph](https://www.hello2morrow.com/products/sonargraph/architect) / SonarQube architecture | 商用の成熟した可視化、rules、metrics、baseline。SonarはStructure101取得後、architecture機能を統合している。 | architecture governance全般。 | オープン、ローカル完結、Kotlin-first、Gradle-nativeであることを明確にする。総合 commercial suiteにはならない。 |
+| SCIP/semanticdb-kotlinc / [Kotlin LSP](https://kotlinlang.org/docs/kotlin-lsp.html) | 定義・参照・位置を機械可読に扱う標準/基盤。Kotlin LSPはcall hierarchyも持つ。 | machine-readable reference dataとagent導線。 | klass-treeの価値は生の参照データそのものではなく、architecture用に正規化したedge、baseline、CI運用。exportは独自DSLより標準形式を優先する。 |
+| 新興semantic graph系（[kartograph](https://github.com/ictechgy/kartograph), [ktrics](https://github.com/koji-1009/ktrics)） | 到達性、dead code、metrics、agent向けqueryなどへの志向が強い。 | semantic dependency intelligence全般。 | 市場が動いているため、単なるJSON出力は差別化にならない。workflowと精度を検証する必要がある。 |
 
-## 市場に足りないもの
+## 市場に残っているギャップ
 
-### 1. Kotlin semanticsを壊さない依存解析
+上の競合を踏まえると、ギャップは最初に想定したより狭い。
 
-Kotlinはtop-level function、extension function、typealias、operator convention、delegation、generated member、inline関数など、bytecodeや単純なsource parsingだけでは意味がずれる構造を多く持つ。Java bytecode中心の解析はJVM上では強い一方、Kotlin固有構造の表現が粗くなりやすい。逆に、importや構文ベースの解析は実際の解決先を取り違えやすい。
+1. **Gradle-nativeなprogressive modernization**: 新規悪化だけを止め、改善を可視化しながらレガシー依存を減らす運用。
+2. **architecture向けに正規化されたソース参照**: 生のfind referencesではなく、owner class/file、edge kind、call-site evidence、module/package pathへ整形済みのデータ。
+3. **Kotlinソース位置と構造の保持**: top-level function、typealias、operator/synthetic call、Kotlin↔Java参照を、修正可能なソース位置へ結び付ける。
+4. **ローカル/CI完結のオープンなworkflow**: commercial platform、外部index service、独自クエリ言語を必須にしない。
 
-klass-treeはKotlin Analysis APIで参照を意味解決し、`TYPE_REFERENCE`、`INHERITANCE`、`CONSTRUCTOR_CALL`、`FUNCTION_CALL`、`PROPERTY_ACCESS`、`CALLABLE_REFERENCE`、`ANNOTATION`、`OPERATOR_OR_SYNTHETIC_CALL`を分けている。これは市場で最も薄い領域であり、継続的に守るべき中核資産である。
+逆に、次はもはや単独では差別化にならない。
 
-### 2. 「どこが悪いか」ではなく「なぜ依存しているか」にたどり着ける証拠
+- machine-readable JSONを出すこと
+- semantic analysisをすること
+- SARIFを出すこと
+- interactive graphを持つこと
 
-モジュール間やパッケージ間の矢印だけでは、修正担当者は原因調査に戻される。実務では、違反を起こしている宣言、呼び出し種別、file/line/column、経路が必要である。
+## klass-treeの価値仮説
 
-klass-treeは同じ`(from, to, kind)`をmergeしつつコールサイトを保持している。この証拠レベルは、レポート、PR annotation、影響分析、AI agentによる自動修正の基礎になる。
+> klass-treeは、Kotlin server-side / JVM backendのmonorepoを対象に、Gradle内で依存グラフを生成し、正確なソース証拠付きでアーキテクチャの悪化を止め、段階的な改善を運用できるようにする。
 
-### 3. レガシーコードベースに導入できる段階的ガバナンス
-
-既存コードで違反が大量にあると、厳格なアーキテクチャルールは初日に失敗する。必要なのは「現状を凍結し、悪化だけ止め、改善を可視化する」ratchetである。
-
-klass-treeのbaselineは行番号ではなくcall-site countを比較するため、無関係な行移動で壊れにくい。これは実運用上の差別化であり、今後のrule engineでも一貫して守るべき体験である。
-
-### 4. オープンでローカル完結し、機械消費しやすい中間表現
-
-商用ツールは高機能だが、データモデルやワークフローが閉じやすい。一方、OSSの単発レポートはカスタム分析やagent連携に弱い。`graph.json`を安定した公開契約にすると、ユーザーは独自可視化、custom rules、コード調査、AIワークフローに再利用できる。
-
-### 5. 大規模リポジトリでの増分解析
-
-宣言レベルのsemantic analysisは重い。klass-treeは現状、実行ごとに選択モジュールを再解析する。大規模monorepoでは、正確さだけでなく変更部分だけを速く再計算できることが採用条件になる。市場にもこれを完全に解決したKotlin特化ツールは少ない。
-
-### 6. Android/KMPをまたぐ一貫モデル
-
-ArchUnitはbytecode前提、module graph系は宣言レベルに届かず、Konsistは宣言検査中心である。KMP/Androidで「プラットフォーム間をまたぐ意味解決済み依存関係」を扱う標準的な解はまだない。ただし、KMPのexpect/actual、source set hierarchy、variant、generated sourceを正確に扱うのは難易度が高い。早期に範囲を広げるより、JVMで精度と運用価値を証明してから拡張すべきである。
-
-## klass-treeが提供できる価値
-
-| 価値 | 現在の根拠 | ユーザー成果 |
-| --- | --- | --- |
-| Kotlin意味論に忠実な依存グラフ | Kotlin Analysis APIによるsemantic resolution、Kotlin/Java相互参照、typealiasやdelegationなどのテスト群 | 「見えているはずの依存がない」「importベースで誤検出する」を減らす |
-| 修正可能な証拠 | edge kindとfile/line/column付きcallSites | 違反報告から直接修正箇所へ移動できる |
-| 段階的 modernization | baseline ratchetとdeny rule | レガシー依存を一括解消しなくても悪化を止められる |
-| 再利用可能なデータ | platform-independentな`graph.json`、optional DOT | 自社ルール、可視化、agent、CIに組み込める |
-| Gradleに自然な導線 | root Gradle plugin、forked analyzer、AOT cache option | ビルド利用者が追加サービスなしで実行できる |
-
-## 推奨ポジショニング
-
-> **klass-treeは、Kotlin/JVMコードベースの依存関係をコンパイラ相当の精度で理解し、修正可能な証拠と段階的なアーキテクチャガバナンスを提供するGradleプラグイン。**
+これは現時点では価値仮説であり、精度corpusと需要検証で裏付ける。検証前に「compiler-grade」「declaration-level」「refactoring-safe」とは呼ばない。
 
 明示的に狙わない領域:
 
 - ktlint/detektのようなstyle/general lint
+- CodeQLのような汎用query language
 - Gradle module graphだけの可視化
-- 全言語対応の商用アーキテクチャスイート
+- 全言語対応のcommercial architecture suite
 - サーバー常駐型のcentral analysis platform
 
 ## 機能実装ロードマップ
 
-### Phase 0: 配布と計測の土台
+### Phase 0: 前提検証と公開準備
+
+| 優先度 | 機能/作業 | 目的 | 完了条件 |
+| --- | --- | --- | --- |
+| P0 | 実OSS precision corpus | 差別化の根拠となる精度を測る。 | 3〜5件のserver-side Kotlin OSSでunresolved率、bytecode参照との差分、failure modeを記録できる。 |
+| P0 | compiler settings/plugin spike | 解析不能の最大リスクを切り分ける。 | languageVersion、opt-in、`-X` flag、serialization/all-open fixtureで何が解決できないか分かる。Analysis API側の制約なら代替案を決める。 |
+| P0 | schema identity/粒度設計 | 後方互換性の悪いschemaを公開固定しない。 | logical node identity、FILE_SCOPEの扱い、target member粒度、module moveの扱いをADR化する。 |
+| P0 | KGP/Analysis API compatibility matrix | 公開後のサポート負債を限定する。 | 対応Kotlin minor、Analysis API version、不一致時の明示的errorを決める。 |
+| P0 | build cache/relocatability audit | CIコストを下げる安価な増分施策を先に取る。 | `@CacheableTask`の可否、absolute pathの排除、per-module output分割の設計がある。 |
+| P0 | Isolated Projects/configuration cache検証 | 大規模Gradleユーザーで詰まる構造を把握する。 | 現行構造の違反点と、spec artifact集約方式の移行案がある。 |
+| P0 | 需要検証 | ツール比較だけでPhase 1の順を決めない。 | 3チーム/3リポジトリにpreviewを試し、HTML、export、rules、queryのどれを実際に使ったかを記録する。 |
+
+### Phase 1: データを consumable にする
 
 | 優先度 | 機能 | 理由 | 実装メモ |
 | --- | --- | --- | --- |
-| P0 | Gradle Plugin Portal / Maven Central公開 | 現状の`includeBuild`は検証用途には強いが、一般導入では大きな摩擦になる。機能以前の採用 blocker。 | signing、versioning、compatibility matrix、release workflowを整える。 |
-| P0 | benchmark fixtureと性能計測 | 大規模対応の判断材料がないと最適化を後回しにしすぎる。 | 小中大 fixture、wall-clock、memory、module数、edge数、unresolved countを記録する。 |
-| P0 | schema contractの明文化 | `graph.json`が製品価値の中心なので、追加・後方互換・ID安定性のルールが必要。 | schemaVersion、generator metadata、analysis stats、warningsを明確にする。 |
+| P1 | Plugin Portal / Maven Central公開 | 検証と採用には配布が必要。ただしmatrixと既知の制約を先に公開する。 | snapshot/previewとして出し、schema stabilityと対応versionを明記する。 |
+| P1 | 汎用export | 独自query DSLを作る前に、既存ツールで検証できるようにする。 | GraphML/CSVを最初の候補にし、SQLite exportをspikeする。JSONはcanonical artifactとして継続。 |
+| P1 | オフラインHTMLレポート MVP | 探索価値は高いが、IDとmember粒度に依存する。 | schema設計後に作る。module/package/class階層、edge kind filter、検索、call-site panel。 |
+| P2 | 内部query/index API | HTML、rules、exportで重複する走査を避ける。 | public DSLとしては売らず、neighbor/path/impact/SCCの内部reuseに留める。 |
+| P2 | 公開query CLI/DSL | CodeQLや汎用graph toolsと競合しやすい。 | export利用者の具体的需要が出てから判断する。 |
 
-### Phase 1: グラフを「調べられる」製品にする
-
-| 優先度 | 機能 | 理由 | 実装メモ |
-| --- | --- | --- | --- |
-| P0 | `graph-query`ライブラリ | HTML report、rule engine、CLI、agent連携の共通基盤。先に作ると重複実装を避けられる。 | `dependenciesOf`、`dependentsOf`、`shortestPath`、`allPaths`、`impactSet`、`cycles`を提供。 |
-| P0 | query CLI / Gradle task | ユーザーがJSONを自前で加工しなくてよくする。AI agentにも使いやすい。 | `klassTreeQuery --from ... --to ...`、`--impact`、`--cycles`、JSON/NDJSON出力。 |
-| P0 | オフラインHTMLレポート | 生JSON/DOTでは探索できず、Aalekhや商用ツールが示すようにレポート体験は採用に直結する。 | サーバー不要の単一HTML。module/package/classの階層、edge kind filter、検索、方向切替、call-site panel。 |
-| P1 | cycle detectionと可視化 | 依存グラフの典型ユースケースで、rulesより先に「構造理解」価値を出せる。 | strongly connected components、cycle group、最小カット候補は後続。 |
-
-### Phase 2: ガバナンスとCI運用
+### Phase 2: 最小限のガバナンス
 
 | 優先度 | 機能 | 理由 | 実装メモ |
 | --- | --- | --- | --- |
-| P1 | architecture rules v1 | 現在のdeny prefixは有用だが、実運用にはlayer/allowlist/例外が必要。 | package/module/layer matcher、allowed dependency、denied dependency、edge kind条件、`because`メッセージ。 |
-| P1 | approved exceptions | すべての例外をbaselineに混ぜると意図が失われる。 | 有効期限、owner、reason、対象edge kindを持つexception file。 |
-| P1 | SARIF/JUnit出力 | GitHub/GitLabのcode quality UIに乗せられ、CIでの見え方が大きく変わる。 | まずSARIFを優先。violation edge単位のresultに現行graphのcallSitesをrelated locationsとして出し、「新規箇所だけ」と誤解されない表現にする。現行baselineは件数だけを保持するため、新規箇所の特定が必要なら別途schema拡張かfull graph diffを設計する。 |
-| P1 | PR diff summary | 追加/削除依存、増減したcall-site count、新規cycleをレビュー単位で説明する。 | machine-readable diffを先に安定させ、PR commentは薄いadapterにする。 |
-| P2 | trend metrics | 改善活動を継続するには時系列が必要。 | dependency count、cycle count、tangle率、denied call-site countをJSON/CSVで出す。DBやSaaSにはしない。 |
+| P1 | move/identity-aware baseline | 現行baselineの主要な誤検出を止める。 | schema identity設計に従う。file/module移動時の互換移行も決める。 |
+| P1 | rules v1（最小範囲） | deny prefixだけでは不足だが、広いrule DSLはscope creep。 | package/module/layer matcher、allowed dependency、edge kind条件、`because`メッセージに限定する。 |
+| P1 | approved exceptions | baselineに例外の意図を混ぜない。 | owner、reason、expiresAt、対象rule/edge kindを持つ。 |
+| P1 | SARIF/JUnit出力 | CIで actionable にする。 | violation edge単位のresultに現行graphのcallSitesをrelated locationsとして出し、「新規箇所だけ」と誤解されない表現にする。新規箇所の特定にはfull graph diffかbaseline schema拡張が必要。 |
+| P2 | PR diff summary | 追加/削除依存、count変化、新規cycleをレビュー単位で説明する。 | machine-readable diffを先に安定させ、PR commentは薄いadapterにする。 |
+| P2 | trend metrics | 改善の継続を可視化する。 | dependency count、cycle count、denied call-site countをJSON/CSVで出す。DBやSaaSにはしない。 |
 
-### Phase 3: 大規模化
-
-| 優先度 | 機能 | 理由 | 実装メモ |
-| --- | --- | --- | --- |
-| P1-P2 | モジュール単位の増分解析 | 採用規模を左右する最大の技術投資。 | source/classpath fingerprint、per-module graph cache、依存module変更時のみ再解析。cross-module resolutionの正確性テストが前提。 |
-| P2 | 並列解析とメモリ最適化 | forked analyzerは分離できるが、大規模ではコストが高い。 | source set単位並列化、worker上限、heap profile。 |
-| P2 | unresolved diagnostics | 精度をユーザーが判断できる必要がある。 | unresolved countをkind/reason/module別に集計し、レポートに出す。 |
-
-### Phase 4: 対象範囲の拡大
+### Phase 3: スケールと対象市場の拡大
 
 | 優先度 | 機能 | 理由 | 実装メモ |
 | --- | --- | --- | --- |
-| P2 | Android/AGP variant対応 | Kotlin市場ではAndroidが大きい。ただしvariantとgenerated sourceの扱いが必要。 | JVMでquery/report/rulesが安定した後。variantごとのsource setとclasspathをAnalysisSpecへ写す。 |
-| P3 | KMP source set対応 | 市場ギャップは大きいが複雑度も最大。 | commonizer/expect/actual/platform classpathの調査から始める。最初はcommonMainのみでもよい。 |
-| P3 | IDE plugin | フィードバックループを最短化できるが、Gradle plugin本体より保守コストが高い。 | HTML reportとquery CLIの需要を確認してから検討する。 |
-| P3 | external dependency nodes | ライブラリ依存の可視化需要はあるが、ノード爆発とノイズを招く。 | default off、artifact単位集約、必要時のみ展開。 |
+| P1-P2 | build cache + per-module output分割 | full analysisの常識的な削減。独自増分解析より先に行う。 | cache correctness、relocatability、module input fingerprintを先に整える。 |
+| P2 | 増分解析 | 大規模monorepoでの採用条件。 | cross-module resolutionを壊さないかcorpusで検証してから実装する。 |
+| P2 | included buildのsource-level analysis | composite buildの宣言がexternal扱いになる制約を減らす。 | build boundaryをまたぐmodule spec交換が必要。Isolated Projects設計と一緒に考える。 |
+| P2-P3 | Android/AGP variant対応 | Kotlin最大市場だが、compiler pluginとgenerated sourceが前提。 | compiler plugin方針とserver-sideでの精度検証が済むまで着手しない。 |
+| P3 | KMP source set対応 | 市場ギャップはあるが複雑度が最も高い。 | expect/actual、source set hierarchy、platform classpathの調査spikeから始める。 |
+| P3 | IDE plugin | feedback loopは短いが保守コストが高い。 | IntelliJ既存機能と重なるため、CI artifactとの補完関係が証明されてから検討する。 |
 
 ## アーキテクチャ上の指針
 
-1. **`klass-tree-graph-core`を公開契約にする。** schemaの後方互換性、ID安定性、serialization testを強化する。
-2. **`graph-query`を新設し、report/rules/CLIの共通土台にする。** Gradle pluginはorchestrationに留める。
-3. **analyzerの正確性を最優先で守る。** top-level、typealias、delegation、Java interop、generated sourceのregression corpusを増やす。精度低下はすべての上位機能を無効化する。
-4. **レポートはstatic/offline-first。** サーバーや外部サービスを必須にしない。データはJSONでエクスポートできる。
-5. **rule engineは「絶対禁止」と「ratchet」の両方を扱う。** 新規コードには厳格、既存コードにはbaseline、例外には期限とownerを持たせる。
-6. **machine-readable first, human-readable second。** SARIF/JSON/NDJSONを安定させ、その上にHTMLとPR commentを作る。
+1. **精度を最優先の製品要件にする。** semantic correctnessのregression corpusを、新機能より先に増やす。
+2. **schemaは公開固定までexperimental扱いにする。** logical identity、member粒度、compiler設定の表現を決めるまで semantic versioning 上の安定契約にしない。
+3. **canonical artifactはJSONのままにする。** ただし公開インターフェースとしてのquery DSLより、汎用exportを優先する。
+4. **内部query/index層は作ってよいが、製品価値として売らない。** HTML、rules、exportの共通土台に留める。
+5. **rule engineは最小限にする。** ArchUnit/Konsist/Sonarの厚い領域へ広がらず、ratchetとevidenceに強い部分だけを提供する。
+6. **Gradleのmodern execution modelに合わせる。** configuration cache、build cache、Isolated Projectsを公開前の設計要件にする。
+7. **source semanticとbytecodeの限界を両方説明する。** compiler plugin/generated codeを含む精度比較を行い、必要ならbytecode cross-checkを補助信号にする。
 
 ## 成功指標
 
-- 初回導入から`graph.json`生成まで10分以内。
-- example以外の中規模OSSプロジェクトで、unresolved reference率とanalysis errorを継続計測できる。
-- HTML reportから任意の違反について、3クリック以内で少なくとも1つのcall siteへ到達できる。
-- CI違反にfile/line/columnとrule reasonが表示される。
-- 大規模fixtureで、変更が1モジュールの場合の分析時間がfull analysisより有意に短い。
-- baseline更新なしで、無関係な行移動により`klassTreeCheck`が失敗しない。
+- 対応matrix内のプロジェクトで、初回導入から`graph.json`生成まで10分以内。
+- precision corpusでunresolved率、external/skip理由、bytecode参照差分を継続計測できる。
+- compiler plugin fixtureで、解決できるものとAnalysis API制約で解決できないものが明確に分かれている。
+- ファイル内の行移動では`klassTreeCheck`が失敗しない。さらにschema移行後は、class/file移動に対する失敗率をcorpusで測定できる。
+- CI違反にrule reasonと少なくとも1つのcurrent call siteが表示される。
+- 変更が1モジュールだけのCI runで、build cacheまたはper-module reuseによりfull analysisを避けられる。
+- previewユーザーがHTML、export、rules、queryのどれを実際に使ったか分かる。
 
 ## 最初に切るべき実装チケット
 
-1. **Publish release pipeline**: Plugin Portal/Maven Central公開、署名、versioned docs。
-2. **Document graph schema v1 contract**: ID、nullable field、互換性方針、stats拡張。
-3. **Add graph-query core**: neighbor、path、impact、SCC/cycle API。
-4. **Add query CLI/Gradle task**: JSON/NDJSON出力を持つ最小CLI。
-5. **Generate static HTML report MVP**: 検索、edge kind filter、call-site panel。
-6. **Emit SARIF from klassTreeCheck**: deny violationをSARIF locationへ写す。
-7. **Add benchmark harness**: fixture生成、計測結果JSON、CI regression threshold。
+1. **Accuracy corpus harness**: OSS fixture取得、unresolved率、bytecode参照差分、結果JSON。
+2. **Compiler configuration spike**: languageVersion、opt-in、`-X`、compiler pluginの現状限界を再現するfixture。
+3. **Graph identity and member-granularity ADR**: stable identity、`FILE_SCOPE`、target member、module moveを決める。
+4. **Compatibility matrix and version validation**: KGP/Analysis APIの対応範囲、不一致時の明示的error。
+5. **Build cache and relocatability audit**: `@CacheableTask`、absolute path、per-module output分割の設計。
+6. **Isolated Projects design spike**: root横断scanをやめ、spec artifactを集約する方式のPoC。
+7. **Preview validation script**: 3リポジトリへの導入手順、利用出力、アンケート/観察項目。
+8. **Generic export MVP**: GraphMLまたはCSV。SQLiteは需要を見て追加。
 
 ## 主要リスクと対策
 
 | リスク | 影響 | 対策 |
 | --- | --- | --- |
-| Kotlin Analysis APIのversion coupling | 利用者のKotlin version更新で壊れる | compatibility matrix、複数Kotlin versionのCI、明示的なerror message。 |
-| 機能範囲の拡大 | lint/可視化/商用architecture suiteとの中途半端な競争になる | 「semantic dependency intelligence」以外のscopeを明示的に削る。 |
-| 大規模解析コスト | 採用対象が小規模プロジェクトに限定される | benchmarkを先に作り、増分解析をPhase 3ではなく採用状況に応じて前倒しする。 |
-| KMP対応の過大評価 | 複雑なsource set semanticsに開発資源を食われる | Android/AGP variantから始め、KMPは調査スパイクと限定対応に分ける。 |
-| HTML reportの保守コスト | frontend実装が本体より重くなる | サーバーなし単一HTML、依存最小化、graph-queryのJSON contractに集中する。 |
+| Analysis API Standaloneの安定性 | `StandaloneWorkaroundApi`、`MockProject`サービス差し替え、`ResolveScopeManager`依存がKotlin更新で壊れ得る。 | 対応versionを絞り、CI matrixを回す。内部API依存点を隔離し、upstream issueを追跡する。 |
+| compiler plugin非対応 | serialization、Compose、all-open/no-argなどで生成memberが見えず、主張する精度を満たせない。 | Phase 0で限界を証明し、対応可能な設定伝播、 explicit limitation、bytecode cross-checkのどれで行くか決める。 |
+| schemaを早く固定しすぎる | ID/粒度の誤りが公開後のbreaking changeになる。 | schemaはexperimental扱いにし、ADRとcorpusの後で固定する。 |
+| CodeQL/IDE/商用ツールとの重複 | semantic/query/reportだけでは差別化できない。 | Gradle-native ratchet、ソース証拠、段階的modernizationにscopeを絞る。 |
+| Gradle execution model | 大規模利用者ほどcache/IPの問題に当たる。 | 公開前にconfiguration cache/build cache/Isolated Projectsの互換性を検証する。 |
+| 需要仮説が外れる | HTMLやrulesを作っても使われない。 | preview導入の観察結果でPhase 1の順序を変える。 |
 
 ## 参考
 
+- [CodeQL for Java and Kotlin](https://codeql.github.com/docs/codeql-language-guides/codeql-for-java/)
+- [dependency-analysis-gradle-plugin Tasks](https://github.com/autonomousapps/dependency-analysis-gradle-plugin/wiki/Tasks)
+- [IntelliJ Dependency Structure Matrix](https://www.jetbrains.com/help/idea/dsm-analysis.html)
+- [Kotlin Language Server](https://kotlinlang.org/docs/kotlin-lsp.html)
 - [ArchUnit User Guide](https://www.archunit.org/userguide/html/000_Index.html)
 - [ArchUnit issue: Support for Kotlin toplevel functions](https://github.com/TNG/ArchUnit/issues/528)
 - [Konsist Architecture Assertion](https://docs.konsist.lemonappdev.com/writing-tests/architecture-assert)
 - [Aalekh](https://github.com/shivathapaa/Aalekh)
 - [Sonargraph Architect](https://www.hello2morrow.com/products/sonargraph/architect)
 - [Sonargraph Kotlin specific issues](https://eclipse.hello2morrow.com/doc/standalone/content/ch04s03s02.html)
+- [Sonar acquires Structure101](https://www.sonarsource.com/company/press-releases/sonar-acquires-structure101-to-strengthen-code-quality-offering/)
+- [Gradle Isolated Projects](https://docs.gradle.org/current/userguide/isolated_projects.html)
+- [Gradle best practices: avoid afterEvaluate](https://docs.gradle.org/current/userguide/best_practices_general.html)
+- [Analysis API compiler plugin discussion in detekt](https://github.com/detekt/detekt/issues/7404)
 - [kartograph](https://github.com/ictechgy/kartograph)
 - [ktrics](https://github.com/koji-1009/ktrics)

@@ -239,8 +239,8 @@ analyzes two modules (`api` depends on `shared`). Use `-PklassTreeTests=true` to
 - Kotlin JVM only (Kotlin Multiplatform, Android, and other platforms are not supported). Java
   language constructs without a Kotlin edge-kind equivalent (e.g. static-initializer reads) map
   to the closest kind.
-- Project dependencies map to the target project's `main` module. Dependencies on projects from
-  included builds are not on the analysis classpath because project components are filtered out.
+- Project dependencies map to the target project's `main` module. Projects from included builds
+  are not analyzed as source modules; their artifacts are treated as binary dependencies.
 - Analysis is not incremental within a run: the task re-analyzes all selected modules.
 - The Analysis API version must stay compatible with the Kotlin compiler of the analyzed build.
 - The implicit `Companion` name does not resolve on a companion object declared with an explicit
