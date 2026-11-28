@@ -26,6 +26,8 @@ internal object JavaReferenceCollector {
                 override fun visitNewExpression(expression: PsiNewExpression) {
                     if (expression.arrayDimensions.isEmpty() && expression.arrayInitializer == null) {
                         result += JavaCallCandidate(expression)
+                    } else {
+                        expression.classReference?.let { result += JavaTypeCandidate(it) }
                     }
                     super.visitNewExpression(expression)
                 }

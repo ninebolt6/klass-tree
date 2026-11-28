@@ -97,16 +97,20 @@ class AnalyzerJavaTest {
             analyze(
                 module(
                     ":app:main",
+                    "Item.java" to "package com.example; public class Item {}",
                     "Main.java" to """
                     package com.example;
                     public class Main {
                         int[] values = new int[4];
                         int[] initials = new int[] { 1 };
+                        Item[] items = new Item[4];
+                        Item[] initialItems = new Item[] { new Item() };
                     }
                 """,
                 ),
             )
 
+        assertNotNull(edge(result.graph, "com.example.Main", "com.example.Item", EdgeKind.TYPE_REFERENCE))
         assertEquals(0, result.stats.resolution.unresolvedByKind[EdgeKind.CONSTRUCTOR_CALL.name] ?: 0)
         assertTrue(
             result.stats.resolution.unresolvedSamples.none {
