@@ -247,6 +247,11 @@ analyzes two modules (`api` depends on `shared`). Use `-PklassTreeTests=true` to
   name (Analysis API limitation); such calls are counted in `unresolved`. Use the declared name
   or `ContainingClass.call()` instead.
 
+## Product strategy
+
+See [docs/feature-strategy.md](docs/feature-strategy.md) for the market-gap analysis and feature
+implementation strategy.
+
 ## Development
 
 klass-tree is built with JDK 25 and targets Java 21 bytecode. `includeBuild` compiles
